@@ -1,0 +1,16 @@
+<!--
+
+Usage Notes:	Blank Top-level XML for function usages
+
+-->
+
+<GuiXml>
+	<Controls>
+		<!-- Blank TopLevelControl for update function usage in routines -->
+		<TopLevelControl name="dbBLANK">
+			<OnUpdate>
+				DB.Update(self)
+			</OnUpdate>
+		</TopLevelControl>
+	</Controls>
+</GuiXml>
