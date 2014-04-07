@@ -14,33 +14,44 @@ DB.dataDefault = {
 }
 
 
---Экспорт одним массивом
-DB.ExportAsArray=true;
-
 local ShowInfo = true
 local startupTS		= GetGameTimeMilliseconds()
 local EventItemreadyHack=0
 
-function DB.Initizlise()
-	EVENT_MANAGER:RegisterForEvent("DataBase", EVENT_ADD_ON_LOADED, OnAddOnLoaded)
+function DB.OnLoad(eventCode, addOnName)
+	if (addOnName ~= "DataBase" ) then return end
+
+	--добавляем команду
+	SLASH_COMMANDS["/db"] = commandHandler
+
+	--Регистрация эвентов
+	EVENT_MANAGER:RegisterForEvent("DataBase", EVENT_OPEN_BANK, DB.PL_Opened)
+	EVENT_MANAGER:RegisterForEvent("DataBase", EVENT_GUILD_BANK_SELECTED, DB.GB_Selected)
+	EVENT_MANAGER:RegisterForEvent("DataBase", EVENT_OPEN_GUILD_BANK, DB.GB_Opened)
+	EVENT_MANAGER:RegisterForEvent("DataBase", EVENT_GUILD_BANK_ITEMS_READY, DB.GB_Ready)
+
+	--Загрузка сохраненных переменных (?)
+	DB.items= ZO_SavedVars:New( "DB_SavedVars" , 2, "items" , DB.dataDefault , nil )
+
+	-- Инициализация графического интерфейся
+	db_s = WINDOW_MANAGER:CreateTopLevelWindow("DBTotal")
+	db_s:SetMouseEnabled(true)
+	db_s:SetMovable(true)
+	db_s:SetDimensions(425,245)
+
+	--	Заголовок1
+	db_s_Title = WINDOW_MANAGER:CreateControl("DBTitle",DBTotal,CT_LABEL)
+	db_s_Title:SetFont( "ZoFontGame" )
+	db_s_Title:SetColor(0,255,255,1.5)
+	db_s_Title:SetText( "Test Test Test" )
+	db_s_Title:SetAnchor(TOPLEFT,lsSum,TOPLEFT,10,0)
+
 end
 
 
 function DB.Update(self)
-			--Регистрация функций
-	if (ShowInfo == true) and ( (GetGameTimeMilliseconds() - startupTS) > 5000 ) then
-		d("Addon loaded")
-		ShowInfo = false
+-- Заготовка для обновления данных
 
-		--добавляем команду
-		SLASH_COMMANDS["/db"] = commandHandler
-
-		--Обработчик эвента
-		EVENT_MANAGER:RegisterForEvent("DataBase", EVENT_OPEN_BANK, DB.PL_Opened)
-		EVENT_MANAGER:RegisterForEvent("DataBase", EVENT_GUILD_BANK_SELECTED, DB.GB_Selected)
-		EVENT_MANAGER:RegisterForEvent("DataBase", EVENT_OPEN_GUILD_BANK, DB.GB_Opened)
-		EVENT_MANAGER:RegisterForEvent("DataBase", EVENT_GUILD_BANK_ITEMS_READY, DB.GB_Ready)
-	end
 end
 
 function DB.PL_Opened()
@@ -133,9 +144,13 @@ function DB.gcount()
 
     local data = {}
     local dataStr = ""
-	
-	DB.items = ZO_SavedVars:NewAccountWide("DB_SavedVars", 1, "items", DB.dataDefault)
+
+	--Обнуление сохраненной базы
+    DB.items.data={}
+    
 	local sv = DB.items.data
+    
+
 	
 	DB.ItemCounter=0
 	bagIcon, bagSlots=GetBagInfo(BAG_GUILDBANK)
@@ -148,16 +163,16 @@ function DB.gcount()
 			--DB.items.name=GetItemName(BAG_GUILDBANK,DB.ItemCounter)
 			--DB.items.count=GetSlotStackSize(BAG_GUILDBANK,DB.ItemCounter)
 			
-			if #sv == 0 then
+			if sv == nil or #sv == 0 then
 				sv[1] = 
 						{
-						 ["name"] = tostring(GetItemName(BAG_GUILDBANK,DB.ItemCounter)),
+						 ["name"] = tostring(GetItemLink(BAG_GUILDBANK,DB.ItemCounter)),
 						 ["count"] = tostring(GetSlotStackSize(BAG_GUILDBANK,DB.ItemCounter))
 						}
 			else
 				sv[#sv+1] = 
 						{
-						 ["name"] = tostring(GetItemName(BAG_GUILDBANK,DB.ItemCounter)),
+						 ["name"] = tostring(GetItemLink(BAG_GUILDBANK,DB.ItemCounter)),
 						 ["count"] = tostring(GetSlotStackSize(BAG_GUILDBANK,DB.ItemCounter))
 						}
 			end
@@ -167,3 +182,7 @@ function DB.gcount()
 	d("---------------------")
 	d("Slots counted: "..DB.ItemCounter)
 end
+
+
+--Инициализация Аддона
+EVENT_MANAGER:RegisterForEvent("DataBase", EVENT_ADD_ON_LOADED, DB.OnLoad)
