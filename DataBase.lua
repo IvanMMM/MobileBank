@@ -173,6 +173,10 @@ function DB.OnLoad(eventCode, addOnName)
 	db_UI.Items.Item.name ={}
 	db_UI.Items.Item.count ={}
 
+	--Отображение Гильбанка по умолчанию
+	DB.DisplayGuildBank()
+end
+
 	function DB.DisplayGuildBank()
 		if (#DB.items.data==0) then return end
 
@@ -217,7 +221,7 @@ function DB.OnLoad(eventCode, addOnName)
 
 		while (DB.ItemCounter < bagSlots) do
 			if GetItemName(BAG_BANK,DB.ItemCounter)~="" then
-				db_UI.TB:AddMessage(RealItemNumber.." : "..GetItemLink(BAG_BANK,DB.ItemCounter).." : "..GetSlotStackSize(BAG_BANK,DB.ItemCounter))
+				db_UI.TB:AddMessage(RealItemNumber.."|| "..GetSlotStackSize(BAG_BANK,DB.ItemCounter).." || "..GetItemLink(BAG_BANK,DB.ItemCounter))
 				RealItemNumber=RealItemNumber+1
 			end
 			DB.ItemCounter=DB.ItemCounter+1
@@ -236,8 +240,6 @@ function DB.OnLoad(eventCode, addOnName)
 	       db_UI.TB:SetScrollPosition((RealItemNumber-1)-val)
 	    end)
 	end
-	DB.DisplayGuildBank()
-end
 
 
 function DB.Update(self)
