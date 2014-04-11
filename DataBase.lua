@@ -5,13 +5,13 @@
 -- /db ic - список инвентаря
 -- /db bc - список банка
 ----------------------------
--- Сделать: фильтры, изменяющийся слайдер, тултипы, подсветку, занято/свободно, отобрафжение банка игрока
+-- Сделать: фильтры, тултипы, подсветку, занято/свободно, отобрафжение банка игрока
 -- Пока работает только отображение Гильдбанка, игрока не трогал.
 
 
 DB = { }
 
-DB.version=0.1
+DB.version=0.11
 
 DB.dataDefault = {
     data = {}
@@ -20,7 +20,6 @@ DB.dataDefault = {
 DB.UI_Movable=false
 DB.CurrentLastValue=11
 
-local BankCreated = false
 local startupTS		= GetGameTimeMilliseconds()
 local EventItemreadyHack=0
 local ScrollDataTransfered=0
@@ -47,6 +46,7 @@ function DB.OnLoad(eventCode, addOnName)
 	db_UI.Button_Guild = WINDOW_MANAGER:CreateControl("DBUI_BtG",DBUI,CT_BUTTON)
 	db_UI.Button_Player = WINDOW_MANAGER:CreateControl("DBUI_BtP",DBUI,CT_BUTTON)
 	db_UI.Button_MoveOff = WINDOW_MANAGER:CreateControl("DBUI_MO",DBUI,CT_BUTTON)
+	db_UI.iTitle = WINDOW_MANAGER:CreateControl("DBUI_iTitle",ZO_PlayerBank,CT_LABEL)
 
 	--Обработчики событий
 
@@ -137,7 +137,7 @@ end
 
 		ZO_SharedRightPanelBackground:SetHidden(value)
 		ZO_PlayerBank:SetHidden(value)
-		ZO_PlayerBankTabs:SetHidden(value)
+		ZO_PlayerBankTabs:SetHidden(true)
 		ZO_PlayerBankFilterDivider:SetHidden(value)
 		ZO_PlayerBankSortBy:SetHidden(value)
 		ZO_PlayerBankInfoBar:SetHidden(value)
@@ -154,21 +154,39 @@ end
 		    -- _G[] - позволяет подставлять динамические имена переменных
 
 	        _G["BackpackRow"..i]:SetHandler("OnMouseWheel" , function(self, delta)
-		    	-- d("New Scroll Value: "..val.."->"..math.floor(val))
-
 		    	local calculatedvalue=DB.CurrentLastValue-delta
 
 		    	if (calculatedvalue>=11) and (calculatedvalue<=#DB.items.data) then
 		    		d("Function called: "..calculatedvalue)
 		    		DB.FillGuildBank(calculatedvalue)
+		    		ZO_PlayerBankBackpackScrollBar:SetValue(calculatedvalue)
 		    	end
 		    end )
 
 		    --Настраиваем слайдер по-своему
-		    ZO_PlayerBankBackpackScrollBar:SetEnabled(true)
-		    ZO_PlayerBankBackpackScrollBar:SetMinMax(11,#DB.items.data)
-		    ZO_PlayerBankBackpackScrollBar:SetValue(11)
-		    ZO_PlayerBankBackpackScrollBar:SetValueStep(1)
+		    local texture='/esoui/art/miscellaneous/scrollbox_elevator.dds'
+			if #DB.items.data>11 then
+			    ZO_PlayerBankBackpackScrollBar:SetEnabled(true)
+			    ZO_PlayerBankBackpackScrollBar:SetMouseEnabled(true)
+			    ZO_PlayerBankBackpackScrollBar:SetOrientation(ORIENTATION_VERTICAL)
+			    ZO_PlayerBankBackpackScrollBar:SetMinMax(11,#DB.items.data)
+			    ZO_PlayerBankBackpackScrollBar:SetValue(11)
+			    ZO_PlayerBankBackpackScrollBar:SetValueStep(1)
+			    -- ZO_PlayerBankBackpackScrollBar:SetHeight(245)
+			    ZO_PlayerBankBackpackScrollBar:SetThumbTexture(texture, texture, texture, 18, (1/#DB.items.data+#DB.items.data)/3, 0, 0, 1, 1)
+
+			    ZO_PlayerBankBackpackScrollBar:SetHandler("OnValueChanged",function(self, value, eventReason) 
+			    	DB.FillGuildBank(value)
+			    end)
+			end
+
+			-- Делаем заголовок
+			db_UI.iTitle:SetFont("ZoFontGame" )
+			db_UI.iTitle:SetColor(255,255,255,1.5)
+			db_UI.iTitle:SetText( "|cff8000Offline Bank Storage|" )
+			db_UI.iTitle:SetHeight(150)
+			db_UI.iTitle:SetAnchor(TOP,ZO_PlayerBank,TOP,0,0)
+
 
 		    -- Фон
 		    OldAnchor=_G["BackpackRow"..i.."Bg"]:GetParent()
@@ -214,12 +232,20 @@ end
 
 		    _G["BackpackRow"..i.."Highlight"]:SetHidden(true)
 		end
-		BankCreated=true
 	end
 
 	function DB.FillGuildBank(last)
 		if last<=1 then return end
-	    if (#DB.items.data==0) then d("Nothing to parse") return end
+	    if (#DB.items.data==0) then d("Nothing to parse") 
+	    	for i=1,11 do
+	    		_G["BackpackRow"..i]:SetHidden(true)
+	    	end
+	    	return 
+	    	else
+	    	for i=1,11 do
+	    		_G["BackpackRow"..i]:SetHidden(false)
+	    	end
+	    end
 	    DB.CurrentLastValue=last
 
 	    -- Заполнение идёт снизу
@@ -338,37 +364,50 @@ function DB.gcount()
 
     local data = {}
     local dataStr = ""
-    local founditems = false
-
-	--Обнуление сохраненной базы
-    DB.items.data={}
-    
-	local sv = DB.items.data
-    	
+    local sv=false
+    -- 0-не найдено, 1-найдено, 2-обновлено
+    local founditems = 0
+      	
 	DB.ItemCounter=0
 	bagIcon, bagSlots=GetBagInfo(BAG_GUILDBANK)
 
 	while (DB.ItemCounter < bagSlots) do
 		if GetItemName(BAG_GUILDBANK,DB.ItemCounter)~="" then
-			d(DB.ItemCounter.." : "..GetItemLink(BAG_GUILDBANK,DB.ItemCounter).." : "..GetSlotStackSize(BAG_GUILDBANK,DB.ItemCounter))
-			founditems=true
-			
+			-- d(DB.ItemCounter.." : "..GetItemLink(BAG_GUILDBANK,DB.ItemCounter).." : "..GetSlotStackSize(BAG_GUILDBANK,DB.ItemCounter))
+
+			if founditems==0 then
+				founditems=1
+			end
+
+			--Обнуление сохраненной базы
+			if  (founditems==1) then 
+				DB.items.data={}
+				sv = DB.items.data 
+				founditems=2
+				d("BaseWiped")
+			end
+	
 			--Избавляемся от мусора при сохранении
 			local namefine=string.gsub(GetItemLink(BAG_GUILDBANK,DB.ItemCounter), "(^p)", "")
 			namefine=string.gsub(namefine, "(^n)", "")
+
+			-- Разбираем строку и вытаскиваем из неё id
+			local start,finish=string.find(namefine,'item:%d+')
+			local id=string.sub(namefine,start+5,finish)
 
 			sv[#sv+1] = 
 					{
 					 ["name"] = tostring(namefine),
 					 ["count"] = tostring(GetSlotStackSize(BAG_GUILDBANK,DB.ItemCounter)),
-					 ["statvalue"]=tostring(GetItemStatValue(BAG_GUILDBANK,DB.ItemCounter))
+					 ["statvalue"]=tostring(GetItemStatValue(BAG_GUILDBANK,DB.ItemCounter)),
+					 ["id"]=tostring(id)
 					}
 		end
 		DB.ItemCounter=DB.ItemCounter+1
 	end
 	d("---------------------")
 	d("Slots counted: "..DB.ItemCounter)
-	if DB.ItemCounter==bagSlots and founditems==false then
+	if DB.ItemCounter==bagSlots and founditems==0 then
 		d("Found nothing... try again")
 	end
 end
