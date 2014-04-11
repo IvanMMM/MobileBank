@@ -5,13 +5,17 @@
 -- /db ic - список инвентаря
 -- /db bc - список банка
 ----------------------------
--- Сделать: фильтры, тултипы, подсветку, занято/свободно, отобрафжение банка игрока
+-- Сделать: тултипы, подсветку, занято/свободно, отобрафжение банка игрока
 -- Пока работает только отображение Гильдбанка, игрока не трогал.
+
+-- Косметические фиксы:  прыгает блядский скроллер.
+
+-- Баги: открытый банк и аддон вызывает наложение друг на друга. Лучше бы, конечно, скрывать весь интерфейс при открытии банка.
 
 
 DB = { }
 
-DB.version=0.11
+DB.version=0.12
 
 DB.dataDefault = {
     data = {}
@@ -47,6 +51,7 @@ function DB.OnLoad(eventCode, addOnName)
 	db_UI.Button_Player = WINDOW_MANAGER:CreateControl("DBUI_BtP",DBUI,CT_BUTTON)
 	db_UI.Button_MoveOff = WINDOW_MANAGER:CreateControl("DBUI_MO",DBUI,CT_BUTTON)
 	db_UI.iTitle = WINDOW_MANAGER:CreateControl("DBUI_iTitle",ZO_PlayerBank,CT_LABEL)
+	db_UI.iSlider = WINDOW_MANAGER:CreateControl("DBUI_iSlider",ZO_PlayerBankBackpack,CT_SLIDER)
 
 	--Обработчики событий
 
@@ -142,7 +147,7 @@ end
 		ZO_PlayerBankSortBy:SetHidden(value)
 		ZO_PlayerBankInfoBar:SetHidden(value)
 		ZO_PlayerBankBackpack:SetHidden(value)
-		ZO_PlayerBankBackpackScrollBar:SetHidden(value)
+		ZO_PlayerBankBackpackScrollBar:SetHidden(true)
 		ZO_PlayerBankBackpackContents:SetHidden(value)
 		ZO_PlayerBankBackpackLandingArea:SetHidden(value)
 	end
@@ -155,27 +160,27 @@ end
 
 	        _G["BackpackRow"..i]:SetHandler("OnMouseWheel" , function(self, delta)
 		    	local calculatedvalue=DB.CurrentLastValue-delta
-
 		    	if (calculatedvalue>=11) and (calculatedvalue<=#DB.items.data) then
-		    		d("Function called: "..calculatedvalue)
 		    		DB.FillGuildBank(calculatedvalue)
-		    		ZO_PlayerBankBackpackScrollBar:SetValue(calculatedvalue)
+		    		db_UI.iSlider:SetValue(calculatedvalue)
 		    	end
 		    end )
 
-		    --Настраиваем слайдер по-своему
+		    --Настраиваем слайдер
 		    local texture='/esoui/art/miscellaneous/scrollbox_elevator.dds'
 			if #DB.items.data>11 then
-			    ZO_PlayerBankBackpackScrollBar:SetEnabled(true)
-			    ZO_PlayerBankBackpackScrollBar:SetMouseEnabled(true)
-			    ZO_PlayerBankBackpackScrollBar:SetOrientation(ORIENTATION_VERTICAL)
-			    ZO_PlayerBankBackpackScrollBar:SetMinMax(11,#DB.items.data)
-			    ZO_PlayerBankBackpackScrollBar:SetValue(11)
-			    ZO_PlayerBankBackpackScrollBar:SetValueStep(1)
-			    -- ZO_PlayerBankBackpackScrollBar:SetHeight(245)
-			    ZO_PlayerBankBackpackScrollBar:SetThumbTexture(texture, texture, texture, 18, (1/#DB.items.data+#DB.items.data)/3, 0, 0, 1, 1)
+			    db_UI.iSlider:SetAnchor(BOTTOM,ZO_PlayerBankBackpack,BOTTOMRIGHT,-10,0)
+			    db_UI.iSlider:SetMouseEnabled(true)
+			    db_UI.iSlider:SetMinMax(11,#DB.items.data)
+			    db_UI.iSlider:SetValue(11)
+			    db_UI.iSlider:SetValueStep(1)
+			    db_UI.iSlider:SetThumbTexture(texture, texture, texture, 18, (1/#DB.items.data+#DB.items.data)/3, 0, 0, 1, 1)
+			    db_UI.iSlider:SetWidth(ZO_PlayerBankBackpackScrollBar:GetWidth())
+			    db_UI.iSlider:SetHeight(550)
+			    db_UI.iSlider:SetAllowDraggingFromThumb(true)
 
-			    ZO_PlayerBankBackpackScrollBar:SetHandler("OnValueChanged",function(self, value, eventReason) 
+			    db_UI.iSlider:SetHandler("OnValueChanged",function(self, value, eventReason)
+			    	d("Slider:"..value)
 			    	DB.FillGuildBank(value)
 			    end)
 			end
@@ -236,12 +241,13 @@ end
 
 	function DB.FillGuildBank(last)
 		if last<=1 then return end
-	    if (#DB.items.data==0) then d("Nothing to parse") 
-	    	for i=1,11 do
-	    		_G["BackpackRow"..i]:SetHidden(true)
-	    	end
+	    if (#DB.items.data==0) then 
+	    	d("Nothing to parse")
+		    	for i=1,11 do
+		    		_G["BackpackRow"..i]:SetHidden(true)
+		    	end
 	    	return 
-	    	else
+    	else
 	    	for i=1,11 do
 	    		_G["BackpackRow"..i]:SetHidden(false)
 	    	end
@@ -277,6 +283,24 @@ end
 
 function DB.PL_Opened()
 	d("Player bank opened")
+	local value=false
+	ZO_SharedRightPanelBackground:SetHidden(value)
+	ZO_PlayerBank:SetHidden(value)
+	ZO_PlayerBankTabs:SetHidden(value)
+	ZO_PlayerBankFilterDivider:SetHidden(value)
+	ZO_PlayerBankSortBy:SetHidden(value)
+	ZO_PlayerBankInfoBar:SetHidden(value)
+	ZO_PlayerBankBackpack:SetHidden(value)
+	ZO_PlayerBankBackpackScrollBar:SetHidden(value)
+	ZO_PlayerBankBackpackContents:SetHidden(value)
+	ZO_PlayerBankBackpackLandingArea:SetHidden(value)
+
+	db_UI.iTitle:SetHidden(true)
+	db_UI.iSlider:SetHidden(true)
+    for i=1,11 do
+		_G["BackpackRow"..i]:SetHidden(true)
+	end
+
 end
 
 function DB.GB_Opened()
