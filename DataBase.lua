@@ -5,19 +5,25 @@
 -- /db ic - список инвентаря
 -- /db bc - список банка
 ----------------------------
+-- Сделать: фильтры, изменяющийся слайдер, тултипы, подсветку, занято/свободно, отобрафжение банка игрока
+-- Пока работает только отображение Гильдбанка, игрока не трогал.
+
+
 DB = { }
 
-DB.version=0.03
+DB.version=0.1
 
 DB.dataDefault = {
     data = {}
 }
 
 DB.UI_Movable=false
+DB.CurrentLastValue=11
 
-local ShowInfo = true
+local BankCreated = false
 local startupTS		= GetGameTimeMilliseconds()
 local EventItemreadyHack=0
+local ScrollDataTransfered=0
 
 function DB.OnLoad(eventCode, addOnName)
 	if (addOnName ~= "DataBase" ) then return end
@@ -34,45 +40,25 @@ function DB.OnLoad(eventCode, addOnName)
 	--Загрузка сохраненных переменных
 	DB.items= ZO_SavedVars:New( "DB_SavedVars" , 2, "items" , DB.dataDefault , nil )
 
-	--Всё подгружается из базы, скроллится и перемещается. 
-	--Минусы: некликабельные строки, нет картинок, неудобное восприятие информации
-
-	-- Полезные функции: 
-	--		Можно получить иконку и стоимость
-	-- 		GetItemLinkInfo(string itemLink)
-	--		
-	--		Отображение тултипа из базы (/script d(db_UI.Tooltip:SetLink(DB.items.data[2].name)))
-	--		SetLink(string aLink)
-
 	--Инициализация графического интерфейся
 	db_UI = WINDOW_MANAGER:CreateTopLevelWindow("DBUI")
 	db_UI.BG = WINDOW_MANAGER:CreateControl("DBUI_BG",DBUI,CT_BACKDROP)
 	db_UI.Title = WINDOW_MANAGER:CreateControl("DBUI_Title",DBUI,CT_LABEL)
-	db_UI.Items = WINDOW_MANAGER:CreateControl("DBUI_Items",DBUI,CT_LABEL)
-	db_UI.TB = WINDOW_MANAGER:CreateControl("DBUI_TB",DBUI,CT_TEXTBUFFER)
-	db_UI.Slider = WINDOW_MANAGER:CreateControl("DBUI_Slider",DBUI_TB,CT_SLIDER)
-	db_UI.Tooltip = WINDOW_MANAGER:CreateControl("DBUI_Tooltip",DBUI,CT_TOOLTIP)
 	db_UI.Button_Guild = WINDOW_MANAGER:CreateControl("DBUI_BtG",DBUI,CT_BUTTON)
 	db_UI.Button_Player = WINDOW_MANAGER:CreateControl("DBUI_BtP",DBUI,CT_BUTTON)
 	db_UI.Button_MoveOff = WINDOW_MANAGER:CreateControl("DBUI_MO",DBUI,CT_BUTTON)
 
 	--Обработчики событий
-	--Прокрутка слайдера и буфера колёсиком
-	db_UI:SetHandler("OnMouseWheel", 
-	function(self,delta)
-		db_UI.TB:SetScrollPosition(DBUI_TB:GetScrollPosition() + delta)
-		db_UI.Slider:SetValue(db_UI.Slider:GetValue()- delta)
-	end)
 
     -- Клик по гильдии
     db_UI.Button_Guild:SetHandler( "OnClicked" , function(self)
-    	db_UI.TB:Clear()
-    	DB.DisplayGuildBank()
+    	local bool = not(ZO_PlayerBank:IsHidden())
+    	DB.FillGuildBank(DB.CurrentLastValue)
+    	DB.DisplayGuildBank(bool)
     end )
 
     -- Клик по игроку
     db_UI.Button_Player:SetHandler( "OnClicked" , function(self)
-    	db_UI.TB:Clear()
     	DB.DisplayPlayerBank()
     end )
 
@@ -89,7 +75,7 @@ function DB.OnLoad(eventCode, addOnName)
 
 	--Общие настройки интерфейса
 	db_UI:SetAnchor(TOPLEFT,GuiRoot,TOPLEFT,10,10)
-	db_UI:SetDimensions(300,245)
+	db_UI:SetDimensions(200,50)
 	db_UI:SetMouseEnabled(true)
 
     if DB.UI_Movable then
@@ -101,7 +87,7 @@ function DB.OnLoad(eventCode, addOnName)
 	end
 
 	--Фон
-	db_UI.BG:SetDimensions(300,245)
+	db_UI.BG:SetDimensions(200,50)
 	db_UI.BG:SetCenterColor(0,0,0,1)
 	db_UI.BG:SetEdgeColor(0,0,0,1)
 	db_UI.BG:SetEdgeTexture("", 8, 1, 1)
@@ -113,34 +99,6 @@ function DB.OnLoad(eventCode, addOnName)
 	db_UI.Title:SetColor(255,255,255,1.5)
 	db_UI.Title:SetText( "|cff8000Bank Storage|" )
 	db_UI.Title:SetAnchor(TOP,DBUI,TOP,0,0)
-
-	--Выводим число вещей в инвентаре:
-	db_UI.Items:SetFont("ZoFontGame" )
-	db_UI.Items:SetColor(255,255,255,1.5)
-	db_UI.Items:SetAnchor(TOPLEFT,DBUI,TOPLEFT,10,20)
-
-	--Текстовый буфер
-	db_UI.TB:SetDimensions(275,200)
-	db_UI.TB:SetFont( "ZoFontGame" )
-	db_UI.TB:SetAnchor(BOTTOM,DBUI,BOTTOM,0,-5)
-	db_UI.TB:SetLinkEnabled(true)
-
-	--Подсказка
-	-- db_UI.Tooltip:SetDimensions(425,345)
-	-- db_UI.Tooltip:SetFont( "ZoFontGame" )
-	-- db_UI.Tooltip:SetAnchor(BOTTOM,DBUI,BOTTOM,50,50)
-
-	--Слайдер
-	-- /script db_UI.Slider:SetBackgroundBottomTexture("", 8, 1, 1)
-	local tex = "/esoui/art/miscellaneous/scrollbox_elevator.dds"
-
-    db_UI.Slider:SetWidth(22)
-	db_UI.Slider:SetOrientation(ORIENTATION_VERTICAL)
-	db_UI.Slider:SetThumbTexture(tex, tex, tex, 22, 100, 0, 0, 1, 1)
-	db_UI.Slider:SetAnchor(BOTTOMRIGHT,db_UI,BOTTOMRIGHT,0,0)
-	db_UI.Slider:SetMouseEnabled(true)
-	db_UI.Slider:SetHeight(245)
-	db_UI.Slider:SetValueStep(1)
 
 	-- Кнопка "Гильдия"
 	db_UI.Button_Guild:SetText("[Guild]")
@@ -165,80 +123,124 @@ function DB.OnLoad(eventCode, addOnName)
 	db_UI.Button_MoveOff:SetFont("ZoFontGameBold")
 	db_UI.Button_MoveOff:SetNormalFontColor(0,255,255,.7)
 	db_UI.Button_MoveOff:SetMouseOverFontColor(0.8,0.4,0,1)
-	
 
-
-	--Отображение
-	db_UI.Items.Item={}
-	db_UI.Items.Item.name ={}
-	db_UI.Items.Item.count ={}
-
-	--Отображение Гильбанка по умолчанию
-	DB.DisplayGuildBank()
+	--Инициализируем наш банк
+	DB.CreateGuildBank()
 end
 
-	function DB.DisplayGuildBank()
-		if (#DB.items.data==0) then return end
+	function DB.DisplayPlayerBank()
 
-		--Обновляем изменяемые значения
-		db_UI.Items:SetText("ItemsTotal: "..#DB.items.data)
-		db_UI.Slider:SetMinMax(1,#DB.items.data)
-    	db_UI.Slider:SetValue(#DB.items.data)
-		db_UI.TB:SetMaxHistoryLines(#DB.items.data)
-		db_UI.TB:SetScrollPosition(0)
-
-		--Прокрутка буфера ползунком слайдера
-		db_UI.Slider:SetHandler("OnValueChanged", 
-		function(self, val, eventReason)
-	       db_UI.TB:SetScrollPosition(#DB.items.data-val)
-	    end)
-
-		for i=1, #DB.items.data, 1 do
-			db_UI.TB:AddMessage(i.."|| "..DB.items.data[i].count.." || "..DB.items.data[i].name)
-
-			-- --Название
-			-- db_UI.Items.Item.name[i] = WINDOW_MANAGER:CreateControl("DBUI_Item_name_"..i,DBUI,CT_LABEL)
-			-- db_UI.Items.Item.name[i]:SetFont("ZoFontGame" )
-			-- db_UI.Items.Item.name[i]:SetColor(255,255,255,1.5)
-			-- db_UI.Items.Item.name[i]:SetText(DB.items.data[i].name)
-			-- db_UI.Items.Item.name[i]:SetAnchor(TOPLEFT,DBUI,TOPLEFT,20,20+i*20)
-
-			-- --Количество
-			-- db_UI.Items.Item.name[i] = WINDOW_MANAGER:CreateControl("DBUI_Item_count_"..i,DBUI,CT_LABEL)
-			-- db_UI.Items.Item.name[i]:SetFont("ZoFontGame" )
-			-- db_UI.Items.Item.name[i]:SetColor(255,255,255,1.5)
-			-- db_UI.Items.Item.name[i]:SetText(DB.items.data[i].count)
-			-- db_UI.Items.Item.name[i]:SetAnchor(TOPLEFT,DBUI,TOPLEFT,300,20+i*20)
-
-		end
 	end
 
 
-	function DB.DisplayPlayerBank()
-		DB.ItemCounter=0
-		local RealItemNumber=1
-		bagIcon, bagSlots=GetBagInfo(BAG_BANK)
+	function DB.DisplayGuildBank(value)
 
-		while (DB.ItemCounter < bagSlots) do
-			if GetItemName(BAG_BANK,DB.ItemCounter)~="" then
-				db_UI.TB:AddMessage(RealItemNumber.."|| "..GetSlotStackSize(BAG_BANK,DB.ItemCounter).." || "..GetItemLink(BAG_BANK,DB.ItemCounter))
-				RealItemNumber=RealItemNumber+1
+		ZO_SharedRightPanelBackground:SetHidden(value)
+		ZO_PlayerBank:SetHidden(value)
+		ZO_PlayerBankTabs:SetHidden(value)
+		ZO_PlayerBankFilterDivider:SetHidden(value)
+		ZO_PlayerBankSortBy:SetHidden(value)
+		ZO_PlayerBankInfoBar:SetHidden(value)
+		ZO_PlayerBankBackpack:SetHidden(value)
+		ZO_PlayerBankBackpackScrollBar:SetHidden(value)
+		ZO_PlayerBankBackpackContents:SetHidden(value)
+		ZO_PlayerBankBackpackLandingArea:SetHidden(value)
+	end
+
+	function DB.CreateGuildBank()
+		local OldAnchor=false
+		for i = 1, 11 do
+		    local dynamicControl = CreateControlFromVirtual("BackpackRow", ZO_PlayerBankBackpackContents, "TemplateBackpackRow",i)
+		    -- _G[] - позволяет подставлять динамические имена переменных
+
+	        _G["BackpackRow"..i]:SetHandler("OnMouseWheel" , function(self, delta)
+		    	-- d("New Scroll Value: "..val.."->"..math.floor(val))
+
+		    	local calculatedvalue=DB.CurrentLastValue-delta
+
+		    	if (calculatedvalue>=11) and (calculatedvalue<=#DB.items.data) then
+		    		d("Function called: "..calculatedvalue)
+		    		DB.FillGuildBank(calculatedvalue)
+		    	end
+		    end )
+
+		    --Настраиваем слайдер по-своему
+		    ZO_PlayerBankBackpackScrollBar:SetEnabled(true)
+		    ZO_PlayerBankBackpackScrollBar:SetMinMax(11,#DB.items.data)
+		    ZO_PlayerBankBackpackScrollBar:SetValue(11)
+		    ZO_PlayerBankBackpackScrollBar:SetValueStep(1)
+
+		    -- Фон
+		    OldAnchor=_G["BackpackRow"..i.."Bg"]:GetParent()
+		    _G["BackpackRow"..i.."Bg"]:ClearAnchors()
+		    _G["BackpackRow"..i.."Bg"]:SetAnchor(TOP,OldAnchor,TOP,0,52*(i-1))
+		    _G["BackpackRow"..i.."Bg"]:SetColor(1,1,1,1)
+		    --На самом деле это хак ('notexture'). Не могу найти нормальную текстуру
+		    _G["BackpackRow"..i.."Bg"]:SetTexture('notexture')
+		    _G["BackpackRow"..i.."Bg"]:SetDimensions (549,52)
+		    _G["BackpackRow"..i.."Bg"]:GetTextureFileDimensions(512,64)
+
+		    -- Кнопка
+			OldAnchor=_G["BackpackRow"..i.."Button"]:GetParent()
+			_G["BackpackRow"..i.."Button"]:ClearAnchors()
+		    _G["BackpackRow"..i.."Button"]:SetAnchor(TOPLEFT,OldAnchor,TOPLEFT,25,52*(i-1))
+
+				--Иконка
+				OldAnchor=_G["BackpackRow"..i.."ButtonIcon"]:GetParent()
+				-- Это не ошибки. Привязки ниже идут к другому якорю.
+				_G["BackpackRow"..i.."ButtonIcon"]:ClearAnchors()
+			    _G["BackpackRow"..i.."ButtonIcon"]:SetAnchor(TOPLEFT,OldAnchor,TOPLEFT,0,0)
+			    _G["BackpackRow"..i.."ButtonIcon"]:SetColor(1,1,1,1)
+			    _G["BackpackRow"..i.."ButtonIcon"]:SetDimensions (40,40)
+			    _G["BackpackRow"..i.."ButtonIcon"]:GetTextureFileDimensions(64,64)
+
+			    --Количество
+				_G["BackpackRow"..i.."ButtonStackCount"]:ClearAnchors()
+			    _G["BackpackRow"..i.."ButtonStackCount"]:SetAnchor(TOPLEFT,OldAnchor,TOPLEFT,20,20)
+			    _G["BackpackRow"..i.."ButtonStackCount"]:SetDimensions (38,35)
+
+		    -- Наименование
+			_G["BackpackRow"..i.."Name"]:ClearAnchors()
+		    _G["BackpackRow"..i.."Name"]:SetAnchor(CENTERLEFT,OldAnchor,CENTERLEFT,50,15)
+
+
+			-- Отображение статов
+			_G["BackpackRow"..i.."StatValue"]:ClearAnchors()
+		    _G["BackpackRow"..i.."StatValue"]:SetAnchor(CENTERLEFT,OldAnchor,CENTERLEFT,380,15)
+
+		    -- Цена
+			_G["BackpackRow"..i.."SellPrice"]:ClearAnchors()
+		    _G["BackpackRow"..i.."SellPrice"]:SetAnchor(CENTERLEFT,OldAnchor,CENTERLEFT,480,15)
+
+		    _G["BackpackRow"..i.."Highlight"]:SetHidden(true)
+		end
+		BankCreated=true
+	end
+
+	function DB.FillGuildBank(last)
+		if last<=1 then return end
+	    if (#DB.items.data==0) then d("Nothing to parse") return end
+	    DB.CurrentLastValue=last
+
+	    -- Заполнение идёт снизу
+	    for i=11,1,-1 do
+	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(DB.items.data[last].name)
+			_G["BackpackRow"..i.."ButtonIcon"]:SetTexture(icon)
+			_G["BackpackRow"..i.."ButtonStackCount"]:SetText(DB.items.data[last].count)
+			_G["BackpackRow"..i.."Name"]:SetText(DB.items.data[last].name)
+		    if (DB.items.data[last].statvalue~="0") then
+				_G["BackpackRow"..i.."StatValue"]:SetText(DB.items.data[last].statvalue)
+			else
+				_G["BackpackRow"..i.."StatValue"]:SetText("-")
 			end
-			DB.ItemCounter=DB.ItemCounter+1
+			_G["BackpackRow"..i.."SellPrice"]:SetText(DB.items.data[last].count*sellPrice)
+			if last<=#DB.items.data and last>1 then
+	    		last=last-1
+	    	else
+	    		last=11
+	    	end
 		end
 
-		--Обновляем изменяемые значения
-		db_UI.Items:SetText("ItemsTotal: "..RealItemNumber-1)
-		db_UI.Slider:SetMinMax(1,RealItemNumber-1)
-    	db_UI.Slider:SetValue(RealItemNumber-1)
-		db_UI.TB:SetMaxHistoryLines(RealItemNumber-1)
-		db_UI.TB:SetScrollPosition(0)
-
-		--Прокрутка буфера ползунком слайдера
-		db_UI.Slider:SetHandler("OnValueChanged", 
-		function(self, val, eventReason)
-	       db_UI.TB:SetScrollPosition((RealItemNumber-1)-val)
-	    end)
 	end
 
 
@@ -358,7 +360,8 @@ function DB.gcount()
 			sv[#sv+1] = 
 					{
 					 ["name"] = tostring(namefine),
-					 ["count"] = tostring(GetSlotStackSize(BAG_GUILDBANK,DB.ItemCounter))
+					 ["count"] = tostring(GetSlotStackSize(BAG_GUILDBANK,DB.ItemCounter)),
+					 ["statvalue"]=tostring(GetItemStatValue(BAG_GUILDBANK,DB.ItemCounter))
 					}
 		end
 		DB.ItemCounter=DB.ItemCounter+1

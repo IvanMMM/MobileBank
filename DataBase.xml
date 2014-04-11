@@ -1,10 +1,63 @@
 <GuiXml>
 	<Controls>
-		<!-- Blank TopLevelControl for update function usage in routines -->
 		<TopLevelControl name="dbBLANK">
 			<OnUpdate>
 				DB.Update(self)
 			</OnUpdate>
 		</TopLevelControl>
+		<!-- Заготовка отображения информации о предмете -->
+		<Control name="TemplateBackpackRow" virtual="true" mouseEnabled="true">
+			<AnchorFill/>
+			<Controls>
+				<!-- Фон -->
+				<Texture name="$(parent)Bg">
+					<AnchorFill/>
+				</Texture>
+
+				<!-- Подсветка -->
+				<Texture name="$(parent)Highlight">
+					<AnchorFill/>
+				</Texture>
+
+				<!-- Новый статус -->
+				<Control name="$(parent)NewStatus">
+					<AnchorFill/>
+				</Control>
+
+				<!-- Кнопка -->
+				<Control name="$(parent)Button">
+					<AnchorFill/>
+					<Controls>
+						<Texture name="$(parent)Icon">
+							<AnchorFill/>
+						</Texture>
+
+						<Cooldown name="$(parent)Cooldown">
+							<AnchorFill/>
+						</Cooldown>
+
+						<Label name="$(parent)StackCount" font="ZoFontGame" color="white">
+							<AnchorFill/>
+						</Label>
+					</Controls>
+				</Control>
+
+				<!-- Имя -->
+				<Label name="$(parent)Name" font="ZoFontGame" color="white">
+					<AnchorFill/>
+				</Label>
+
+				<!-- Значение -->
+				<Label name="$(parent)StatValue" font="ZoFontGame" color="white">
+					<AnchorFill/>
+				</Label>
+
+				<!-- Цена -->
+				<Label name="$(parent)SellPrice" font="ZoFontGame" color="white">
+					<AnchorFill/>
+				</Label>
+
+			</Controls>
+		</Control>
 	</Controls>
 </GuiXml>
