@@ -6,7 +6,31 @@
 			</OnUpdate>
 		</TopLevelControl>
 		<!-- Заготовка отображения информации о предмете -->
-		<Control name="TemplateBackpackRow" virtual="true" mouseEnabled="true">
+		<Control name="DBUI_Container" mouseEnabled="true">
+			<Controls>
+				<!-- Фон -->
+				<Backdrop name="$(parent)Bg">
+					<!-- <AnchorFill/> -->
+				</Backdrop>
+
+				<!-- Заголовок -->
+				<Label name="$(parent)Title" font="ZoFontGame">
+					<!-- <AnchorFill/> -->
+				</Label>
+
+				<!-- Счетчик вещей -->
+				<Label name="$(parent)ItemCounter" font="ZoFontGame" color="white">
+					<AnchorFill/>
+				</Label>
+
+				<!-- Слайдер -->
+				<Slider name="$(parent)Slider" mouseEnabled="true" step="1">
+					<!-- <AnchorFill/> -->
+				</Slider>
+
+			</Controls>
+		</Control>
+		<Control name="TemplateRow" virtual="true" mouseEnabled="true">
 			<AnchorFill/>
 			<Controls>
 				<!-- Фон -->
@@ -32,10 +56,6 @@
 							<AnchorFill/>
 						</Texture>
 
-						<Cooldown name="$(parent)Cooldown">
-							<AnchorFill/>
-						</Cooldown>
-
 						<Label name="$(parent)StackCount" font="ZoFontGame" color="white">
 							<AnchorFill/>
 						</Label>
@@ -56,7 +76,6 @@
 				<Label name="$(parent)SellPrice" font="ZoFontGame" color="white">
 					<AnchorFill/>
 				</Label>
-
 			</Controls>
 		</Control>
 	</Controls>
