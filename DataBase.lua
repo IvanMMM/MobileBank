@@ -1,9 +1,6 @@
 --	DataBase v0.01
 ----------------------------
 --	Список команд:
--- /db bag - список сумок
--- /db ic - список инвентаря
--- /db bc - список банка
 -- /db cls - очистить собраные данные
 ----------------------------
 -- Сделать: тултипы, подсветку, занято/свободно
@@ -16,7 +13,7 @@
 
 DB = { }
 
-DB.version=0.16
+DB.version=0.18
 
 DB.dataDefaultItems = {
     data = {}
@@ -27,7 +24,6 @@ DB.dataDefaultParams = {
 }
 
 DB.UI_Movable=false
-DB.BankCreated=false
 DB.AddonReady=false
 
 function DB.OnLoad(eventCode, addOnName)
@@ -73,47 +69,25 @@ function DB.CreateMenu()
     -- Клик по гильдии
     db_UI.Menu.Button.Guild:SetHandler( "OnClicked" , function(self)
     	local bool = not(DBUI_Container:IsHidden())
-    	DB.HideContainer(bool)
     	DB.CurrentLastValue=11
 
-	    DBUI_ContainerSlider:SetHandler("OnValueChanged",function(self, value, eventReason)
-	    	DB.FillGuildBank(value)
-	    end)
-
-	    for i=1,11 do
-	        _G["DBUI_Row"..i]:SetHandler("OnMouseWheel" , function(self, delta)
-		    	local calculatedvalue=DB.CurrentLastValue-delta
-		    	if (calculatedvalue>=11) and (calculatedvalue<=#DB.items.data) then
-		    		DB.FillGuildBank(calculatedvalue)
-		    		DBUI_ContainerSlider:SetValue(calculatedvalue)
-		    	end
-		    end )
-	    end
-
-    	DB.FillGuildBank(DB.CurrentLastValue)
+    	if DBUI_Container:IsHidden() then
+    		DB.PrepareBankValues("Guild")
+    		DB.FillBank(DB.CurrentLastValue)
+    	end
+    	DB.HideContainer(bool)
     end )
 
     -- Клик по игроку
     db_UI.Menu.Button.Player:SetHandler( "OnClicked" , function(self)
     	local bool = not(DBUI_Container:IsHidden())
-    	DB.HideContainer(bool)
     	DB.CurrentLastValue=11
 
-	    DBUI_ContainerSlider:SetHandler("OnValueChanged",function(self, value, eventReason)
-	    	DB.FillPlayerBank(value)
-	    end)
-
-	    for i=1,11 do
-	        _G["DBUI_Row"..i]:SetHandler("OnMouseWheel" , function(self, delta)
-		    	local calculatedvalue=DB.CurrentLastValue-delta
-		    	if (calculatedvalue>=11) and (calculatedvalue<=DB.ItemCounter) then
-		    		DB.FillPlayerBank(calculatedvalue)
-		    		DBUI_ContainerSlider:SetValue(calculatedvalue)
-		    	end
-		    end )
-	    end
-
-    	DB.FillPlayerBank(DB.CurrentLastValue)
+    	if DBUI_Container:IsHidden() then
+			DB.PrepareBankValues("Player")
+	    	DB.FillBank(DB.CurrentLastValue)
+    	end
+    	DB.HideContainer(bool)
     end )
 
     -- Клик по M
@@ -131,23 +105,6 @@ function DB.CreateMenu()
 
     DBUI_Menu:SetHandler("OnMouseUp" , function(self) DB.MouseUp(self) end)
     DBUI_Container:SetHandler("OnMouseUp" , function(self) DB.MouseUp(self) end)
-
-    function DB.MouseUp(self)
-    	local name = self:GetName()
-	    local left = self:GetLeft()
-	    local top = self:GetTop()
-
-	    if name=="DBUI_Menu" then
-	    	d("Menu saved")
-	    	DB.params.DBUI_Menu={left,top}
-	    elseif name=="DBUI_Container" then
-	    	d("Container saved")
-	    	DB.params.DBUI_Container={left,top}
-	    else
-	    	d("Unknown window")
-	    end
-
-	end
 
 	--Настройки меню
 	db_UI.Menu:SetAnchor(TOPLEFT,DBUI,TOPLEFT,DB.params.DBUI_Menu[1],DB.params.DBUI_Menu[2])
@@ -280,92 +237,74 @@ function DB.CreateBank()
 
 	    _G["DBUI_Row"..i.."Highlight"]:SetHidden(true)
 	end
-	DB.BankCreated=true
 end
 
-function DB.FillPlayerBank(last)
+function DB.PrepareBankValues(PrepareType)
+	DB.BankValueTable={}
 
-	DB.ItemCounter=0
-	bagIcon, bagSlots=GetBagInfo(BAG_BANK)
+	if PrepareType=="Player" then
+		d("Preparing Player values")
+		bagIcon, bagSlots=GetBagInfo(BAG_BANK)
+		DB.ItemCounter=0
+		while (DB.ItemCounter < bagSlots) do
+			if GetItemName(BAG_BANK,DB.ItemCounter)~="" then
 
-	while (DB.ItemCounter < bagSlots) do
-		if GetItemName(BAG_BANK,DB.ItemCounter)~="" then
+				--Избавляемся от мусора при сохранении
+				local namefine=string.gsub(GetItemLink(BAG_BANK,DB.ItemCounter), "(^p)", "")
+				namefine=string.gsub(namefine, "(^n)", "")
+
+				local start,finish=string.find(namefine,'|h.+|h')
+				local nameClear=string.sub(namefine,start+2,finish-2)
+
+
+				DB.BankValueTable[#DB.BankValueTable+1]={
+					["name"]=tostring(namefine),
+					["nameClear"]=tostring(nameClear),
+					["count"]=tostring(GetSlotStackSize(BAG_BANK,DB.ItemCounter)),
+					["statvalue"]=tostring(GetItemStatValue(BAG_BANK,DB.ItemCounter))
+			}
+			end
 			DB.ItemCounter=DB.ItemCounter+1
 		end
-	end
-	-- Отсчет начинается с "0"
-	DB.ItemCounter=DB.ItemCounter-1
-
-	if last<=1 then d("last<=1") return end
-    if (DB.ItemCounter==0) then 
-    	d("No items in bank")
-    	DB.HideContainer(true)
-	    	for i=1,11 do
-	    		_G["DBUI_Row"..i]:SetHidden(true)
-	    	end
-    	return 
+	elseif PrepareType=="Guild" then
+		d("Preparing Guild values")
+		DB.BankValueTable=DB.items.data
 	else
-		local texture='/esoui/art/miscellaneous/scrollbox_elevator.dds'
-    	DBUI_ContainerSlider:SetMinMax(11,DB.ItemCounter)
-    	DBUI_ContainerSlider:SetThumbTexture(texture, texture, texture, 18, (1/DB.ItemCounter+DB.ItemCounter)/3, 0, 0, 1, 1)
-    	for i=1,11 do
-    		_G["DBUI_Row"..i]:SetHidden(false)
-    	end
-    end
-    DB.CurrentLastValue=last
-
-    if DB.ItemCounter<11 then
-    	-- Прячем Слайдер
-    	DBUI_ContainerSlider:SetHidden(true)
-	    -- Заполнение идёт сверху
-	    for i=1,DB.ItemCounter do
-	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(GetItemLink(BAG_BANK,i))
-			_G["DBUI_Row"..i.."ButtonIcon"]:SetTexture(icon)
-			_G["DBUI_Row"..i.."ButtonStackCount"]:SetText(GetSlotStackSize(BAG_BANK,i))
-			_G["DBUI_Row"..i.."Name"]:SetText(GetItemLink(BAG_BANK,i))
-		    if (GetItemStatValue(BAG_BANK,i)~="0") then
-				_G["DBUI_Row"..i.."StatValue"]:SetText(GetItemStatValue(BAG_BANK,i))
-			else
-				_G["DBUI_Row"..i.."StatValue"]:SetText("-")
-			end
-			_G["DBUI_Row"..i.."SellPrice"]:SetText(GetSlotStackSize(BAG_GUILDBANK,i)*sellPrice)
-		end
-		-- Прячем пустые строки
-		for i=DB.ItemCounter+1,11 do
-			_G["DBUI_Row"..i]:SetHidden(true)
-		end
-    else
-    	-- Показываем слайдер
-    	DBUI_ContainerSlider:SetHidden(false)
-
-    	-- Поправка на начало отсчета с 0
-    	last=last-1
-	    -- Заполнение идёт снизу
-	    for i=11,1,-1 do
-	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle=GetItemLinkInfo(GetItemLink(BAG_BANK,last))
-			_G["DBUI_Row"..i.."ButtonIcon"]:SetTexture(icon)
-			_G["DBUI_Row"..i.."ButtonStackCount"]:SetText(GetSlotStackSize(BAG_BANK,last))
-			_G["DBUI_Row"..i.."Name"]:SetText(GetItemLink(BAG_BANK,last))
-		    if (GetItemStatValue(BAG_BANK,last)~=0) then
-				_G["DBUI_Row"..i.."StatValue"]:SetText(GetItemStatValue(BAG_BANK,last))
-			else
-				_G["DBUI_Row"..i.."StatValue"]:SetText("-")
-			end
-			_G["DBUI_Row"..i.."SellPrice"]:SetText(GetSlotStackSize(BAG_BANK,last)*sellPrice)
-			d()
-			if last<=DB.ItemCounter and last>0 then
-	    		last=last-1
-	    	else
-	    		last=last
-	    	end
-		end
+		d("Unknown prepare type: "..tostring(PrepareType))
 	end
+
+    DBUI_ContainerSlider:SetHandler("OnValueChanged",function(self, value, eventReason)
+		DB.FillBank(value)
+    end)
+
+    for i=1,11 do
+        _G["DBUI_Row"..i]:SetHandler("OnMouseWheel" , function(self, delta)
+	    	local calculatedvalue=DB.CurrentLastValue-delta
+	    	if (calculatedvalue>=11) and (calculatedvalue<=#DB.BankValueTable) then
+	    		DB.FillBank(calculatedvalue)
+	    		DBUI_ContainerSlider:SetValue(calculatedvalue)
+	    	end
+	    end )
+    end
+
+    DB.SortPreparedValues()
+	return DB.BankValueTable
 
 end
 
-function DB.FillGuildBank(last)
+function DB.SortPreparedValues()
+
+	function compare(a,b)
+		-- d("a: "..tostring(a["nameClear"])..", b: "..tostring(b["nameClear"]))
+		return a["nameClear"]<b["nameClear"]	
+	end
+
+	table.sort(DB.BankValueTable,compare)
+end
+
+function DB.FillBank(last)
 	if last<=1 then d("last<=1") return end
-    if (#DB.items.data==0) then 
+    if (#DB.BankValueTable==0) then 
     	d("No data avaliable. Open your bank first.")
     	DB.HideContainer(true)
 	    	for i=1,11 do
@@ -374,32 +313,32 @@ function DB.FillGuildBank(last)
     	return 
 	else
 		local texture='/esoui/art/miscellaneous/scrollbox_elevator.dds'
-    	DBUI_ContainerSlider:SetMinMax(11,#DB.items.data)
-    	DBUI_ContainerSlider:SetThumbTexture(texture, texture, texture, 18, (1/#DB.items.data+#DB.items.data)/3, 0, 0, 1, 1)
+    	DBUI_ContainerSlider:SetMinMax(11,#DB.BankValueTable)
+    	DBUI_ContainerSlider:SetThumbTexture(texture, texture, texture, 18, (1/#DB.BankValueTable*25000)/3, 0, 0, 1, 1)
     	for i=1,11 do
     		_G["DBUI_Row"..i]:SetHidden(false)
     	end
     end
     DB.CurrentLastValue=last
 
-    if #DB.items.data<11 then
+    if #DB.BankValueTable<11 then
     	-- Прячем Слайдер
     	DBUI_ContainerSlider:SetHidden(true)
 	    -- Заполнение идёт сверху
-	    for i=1,#DB.items.data do
-	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(DB.items.data[i].name)
+	    for i=1,#DB.BankValueTable do
+	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(DB.BankValueTable[i].name)
 			_G["DBUI_Row"..i.."ButtonIcon"]:SetTexture(icon)
-			_G["DBUI_Row"..i.."ButtonStackCount"]:SetText(DB.items.data[i].count)
-			_G["DBUI_Row"..i.."Name"]:SetText(DB.items.data[i].name)
-		    if (DB.items.data[i].statvalue~="0") then
-				_G["DBUI_Row"..i.."StatValue"]:SetText(DB.items.data[i].statvalue)
+			_G["DBUI_Row"..i.."ButtonStackCount"]:SetText(DB.BankValueTable[i].count)
+			_G["DBUI_Row"..i.."Name"]:SetText(DB.BankValueTable[i].name)
+		    if (DB.BankValueTable[i].statvalue~="0") then
+				_G["DBUI_Row"..i.."StatValue"]:SetText(DB.BankValueTable[i].statvalue)
 			else
 				_G["DBUI_Row"..i.."StatValue"]:SetText("-")
 			end
-			_G["DBUI_Row"..i.."SellPrice"]:SetText(DB.items.data[i].count*sellPrice)
+			_G["DBUI_Row"..i.."SellPrice"]:SetText(DB.BankValueTable[i].count*sellPrice)
 		end
 		-- Прячем пустые строки
-		for i=#DB.items.data+1,11 do
+		for i=#DB.BankValueTable+1,11 do
 			_G["DBUI_Row"..i]:SetHidden(true)
 		end
     else
@@ -407,17 +346,17 @@ function DB.FillGuildBank(last)
     	DBUI_ContainerSlider:SetHidden(false)
 	    -- Заполнение идёт снизу
 	    for i=11,1,-1 do
-	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(DB.items.data[last].name)
+	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(DB.BankValueTable[last].name)
 			_G["DBUI_Row"..i.."ButtonIcon"]:SetTexture(icon)
-			_G["DBUI_Row"..i.."ButtonStackCount"]:SetText(DB.items.data[last].count)
-			_G["DBUI_Row"..i.."Name"]:SetText(DB.items.data[last].name)
-		    if (DB.items.data[last].statvalue~="0") then
-				_G["DBUI_Row"..i.."StatValue"]:SetText(DB.items.data[last].statvalue)
+			_G["DBUI_Row"..i.."ButtonStackCount"]:SetText(DB.BankValueTable[last].count)
+			_G["DBUI_Row"..i.."Name"]:SetText(DB.BankValueTable[last].name)
+		    if (DB.BankValueTable[last].statvalue~="0") then
+				_G["DBUI_Row"..i.."StatValue"]:SetText(DB.BankValueTable[last].statvalue)
 			else
 				_G["DBUI_Row"..i.."StatValue"]:SetText("-")
 			end
-			_G["DBUI_Row"..i.."SellPrice"]:SetText(DB.items.data[last].count*sellPrice)
-			if last<=#DB.items.data and last>1 then
+			_G["DBUI_Row"..i.."SellPrice"]:SetText(DB.BankValueTable[last].count*sellPrice)
+			if last<=#DB.BankValueTable and last>1 then
 	    		last=last-1
 	    	else
 	    		last=11
@@ -433,7 +372,6 @@ function DB.PL_Opened()
 end
 
 function DB.PL_Closed()
-
 end
 
 function DB.GB_Opened()
@@ -449,74 +387,17 @@ function DB.GB_Ready()
 	end
 end
 
-function DB.GB_Selected(guildid)
-	d("Bank owned by "..guildid.." selected")
-	DB.GuildBankId=GetSelectedGuildBankId()
-	d("GuildBank id: "..DB.GuildBankId)
-end
 
 
 function commandHandler( text )
-	if text=="ic" then
-		DB.icount()
-	elseif text=="bc" then
-		DB.bcount()
-	elseif text=="gc" then
-		DB.gcount()
-	elseif text=="cls" then
+	if text=="cls" then
 		DB.items.data={}
 		DB.params.DBUI_Menu=nil
 		DB.params.DBUI_Container=nil
 		d("All data cleared")
 	else
-		d("/db bag - bags list")
-		d("/db ic - iventory list")
-		d("/db bc - bank list")
-		d("/db gc - guildbank list")
 		d("/db cls - clear all data ")
 	end
-end
-
-function DB.icount()
-	DB.ItemCounter=0
-	bagIcon, bagSlots=GetBagInfo(BAG_BACKPACK)
-
-	for i = bagSlots, 0, -1 do
-		bagSpace = i
-		if CheckInventorySpaceSilently(bagSpace) then break end
-	end
-
-	d("BagSpaceTotal: "..bagSlots)
-	d("BagSpaceFree: "..bagSpace)
-	d("BagSpaceOccupied: "..(bagSlots-bagSpace))
-	d("slot:name:count")
-	
-	while (DB.ItemCounter < bagSlots) do
-		if GetItemName(BAG_BACKPACK,DB.ItemCounter)~="" then
-			d(DB.ItemCounter.." : "..GetItemName(BAG_BACKPACK,DB.ItemCounter).." : "..GetItemTotalCount(BAG_BACKPACK,DB.ItemCounter))
-		end
-		DB.ItemCounter=DB.ItemCounter+1
-	end
-	-- d("---------------------")
-	-- d("Items total: "..(bagSlots-bagSpace))
-	-- d("Slots counted: "..DB.ItemCounter)
-end
-
-function DB.bcount()
-	DB.ItemCounter=0
-	bagIcon, bagSlots=GetBagInfo(BAG_BANK)
-
-	d("BagSpaceTotal: "..bagSlots)
-
-	d("slot:name:count")
-	while (DB.ItemCounter < bagSlots) do
-		if GetItemName(BAG_BANK,DB.ItemCounter)~="" then
-			d(DB.ItemCounter.." : "..GetItemName(BAG_BANK,DB.ItemCounter).." : "..GetSlotStackSize(BAG_BANK,DB.ItemCounter))
-		end
-		DB.ItemCounter=DB.ItemCounter+1
-	end
-	-- d("---------------------")
-	-- d("Slots counted: "..DB.ItemCounter)
 end
 
 function DB.gcount()
@@ -554,9 +435,13 @@ function DB.gcount()
 			local start,finish=string.find(namefine,'item:%d+')
 			local id=string.sub(namefine,start+5,finish)
 
+			start,finish=string.find(namefine,'|h.+|h')
+			local nameClear=string.sub(namefine,start+2,finish-2)
+
 			sv[#sv+1] = 
 					{
 					 ["name"] = tostring(namefine),
+					 ["nameClear"]=tostring(nameClear),
 					 ["count"] = tostring(GetSlotStackSize(BAG_GUILDBANK,DB.ItemCounter)),
 					 ["statvalue"]=tostring(GetItemStatValue(BAG_GUILDBANK,DB.ItemCounter)),
 					 ["id"]=tostring(id)
@@ -569,6 +454,22 @@ function DB.gcount()
 	if DB.ItemCounter==bagSlots and founditems==0 then
 		d("No data found. Try again.")
 	end
+end
+
+function DB.MouseUp(self)
+	local name = self:GetName()
+    local left = self:GetLeft()
+    local top = self:GetTop()
+
+    if name=="DBUI_Menu" then
+    	d("Menu saved")
+    	DB.params.DBUI_Menu={left,top}
+    elseif name=="DBUI_Container" then
+    	d("Container saved")
+    	DB.params.DBUI_Container={left,top}
+    else
+    	d("Unknown window")
+    end
 end
 
 function DB.Update(self)
