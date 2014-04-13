@@ -6,8 +6,7 @@
 -- /db bc - список банка
 -- /db cls - очистить собраные данные
 ----------------------------
--- Сделать: тултипы, подсветку, занято/свободно, отображение банка игрока
--- Пока работает только отображение Гильдбанка, игрока не трогал.
+-- Сделать: тултипы, подсветку, занято/свободно
 
 -- Пригодится: 
 -- WINDOW_MANAGER:GetMouseOverControl()
@@ -17,7 +16,7 @@
 
 DB = { }
 
-DB.version=0.15
+DB.version=0.16
 
 DB.dataDefaultItems = {
     data = {}
@@ -28,7 +27,6 @@ DB.dataDefaultParams = {
 }
 
 DB.UI_Movable=false
-DB.CurrentLastValue=11
 DB.BankCreated=false
 DB.AddonReady=false
 
@@ -76,12 +74,46 @@ function DB.CreateMenu()
     db_UI.Menu.Button.Guild:SetHandler( "OnClicked" , function(self)
     	local bool = not(DBUI_Container:IsHidden())
     	DB.HideContainer(bool)
+    	DB.CurrentLastValue=11
+
+	    DBUI_ContainerSlider:SetHandler("OnValueChanged",function(self, value, eventReason)
+	    	DB.FillGuildBank(value)
+	    end)
+
+	    for i=1,11 do
+	        _G["DBUI_Row"..i]:SetHandler("OnMouseWheel" , function(self, delta)
+		    	local calculatedvalue=DB.CurrentLastValue-delta
+		    	if (calculatedvalue>=11) and (calculatedvalue<=#DB.items.data) then
+		    		DB.FillGuildBank(calculatedvalue)
+		    		DBUI_ContainerSlider:SetValue(calculatedvalue)
+		    	end
+		    end )
+	    end
+
     	DB.FillGuildBank(DB.CurrentLastValue)
     end )
 
     -- Клик по игроку
     db_UI.Menu.Button.Player:SetHandler( "OnClicked" , function(self)
-    	DB.DisplayPlayerBank()
+    	local bool = not(DBUI_Container:IsHidden())
+    	DB.HideContainer(bool)
+    	DB.CurrentLastValue=11
+
+	    DBUI_ContainerSlider:SetHandler("OnValueChanged",function(self, value, eventReason)
+	    	DB.FillPlayerBank(value)
+	    end)
+
+	    for i=1,11 do
+	        _G["DBUI_Row"..i]:SetHandler("OnMouseWheel" , function(self, delta)
+		    	local calculatedvalue=DB.CurrentLastValue-delta
+		    	if (calculatedvalue>=11) and (calculatedvalue<=DB.ItemCounter) then
+		    		DB.FillPlayerBank(calculatedvalue)
+		    		DBUI_ContainerSlider:SetValue(calculatedvalue)
+		    	end
+		    end )
+	    end
+
+    	DB.FillPlayerBank(DB.CurrentLastValue)
     end )
 
     -- Клик по M
@@ -198,27 +230,15 @@ function DB.CreateBank()
     DBUI_ContainerSlider:SetHeight(550)
     DBUI_ContainerSlider:SetAllowDraggingFromThumb(true)
 
-    DBUI_ContainerSlider:SetHandler("OnValueChanged",function(self, value, eventReason)
-    	DB.FillGuildBank(value)
-    end)
-
 	for i = 1, 11 do
 	    local dynamicControl = CreateControlFromVirtual("DBUI_Row", DBUI_Container, "TemplateRow",i)
 	    -- _G[] - позволяет подставлять динамические имена переменных
-
-        _G["DBUI_Row"..i]:SetHandler("OnMouseWheel" , function(self, delta)
-	    	local calculatedvalue=DB.CurrentLastValue-delta
-	    	if (calculatedvalue>=11) and (calculatedvalue<=#DB.items.data) then
-	    		DB.FillGuildBank(calculatedvalue)
-	    		DBUI_ContainerSlider:SetValue(calculatedvalue)
-	    	end
-	    end )
 
 	    -- Строка
 	    local fromtop=60
 	    _G["DBUI_Row"..i]:ClearAnchors()
 	    _G["DBUI_Row"..i]:SetAnchor(TOP,DBUI_Container,TOP,0,fromtop+52*(i-1))
-	    _G["DBUI_Row"..i]:SetDimensions (530,40)
+	    _G["DBUI_Row"..i]:SetDimensions (530,52)
 
 
 	    -- Фон
@@ -263,7 +283,84 @@ function DB.CreateBank()
 	DB.BankCreated=true
 end
 
-function DB.DisplayPlayerBank()
+function DB.FillPlayerBank(last)
+
+	DB.ItemCounter=0
+	bagIcon, bagSlots=GetBagInfo(BAG_BANK)
+
+	while (DB.ItemCounter < bagSlots) do
+		if GetItemName(BAG_BANK,DB.ItemCounter)~="" then
+			DB.ItemCounter=DB.ItemCounter+1
+		end
+	end
+	-- Отсчет начинается с "0"
+	DB.ItemCounter=DB.ItemCounter-1
+
+	if last<=1 then d("last<=1") return end
+    if (DB.ItemCounter==0) then 
+    	d("No items in bank")
+    	DB.HideContainer(true)
+	    	for i=1,11 do
+	    		_G["DBUI_Row"..i]:SetHidden(true)
+	    	end
+    	return 
+	else
+		local texture='/esoui/art/miscellaneous/scrollbox_elevator.dds'
+    	DBUI_ContainerSlider:SetMinMax(11,DB.ItemCounter)
+    	DBUI_ContainerSlider:SetThumbTexture(texture, texture, texture, 18, (1/DB.ItemCounter+DB.ItemCounter)/3, 0, 0, 1, 1)
+    	for i=1,11 do
+    		_G["DBUI_Row"..i]:SetHidden(false)
+    	end
+    end
+    DB.CurrentLastValue=last
+
+    if DB.ItemCounter<11 then
+    	-- Прячем Слайдер
+    	DBUI_ContainerSlider:SetHidden(true)
+	    -- Заполнение идёт сверху
+	    for i=1,DB.ItemCounter do
+	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(GetItemLink(BAG_BANK,i))
+			_G["DBUI_Row"..i.."ButtonIcon"]:SetTexture(icon)
+			_G["DBUI_Row"..i.."ButtonStackCount"]:SetText(GetSlotStackSize(BAG_BANK,i))
+			_G["DBUI_Row"..i.."Name"]:SetText(GetItemLink(BAG_BANK,i))
+		    if (GetItemStatValue(BAG_BANK,i)~="0") then
+				_G["DBUI_Row"..i.."StatValue"]:SetText(GetItemStatValue(BAG_BANK,i))
+			else
+				_G["DBUI_Row"..i.."StatValue"]:SetText("-")
+			end
+			_G["DBUI_Row"..i.."SellPrice"]:SetText(GetSlotStackSize(BAG_GUILDBANK,i)*sellPrice)
+		end
+		-- Прячем пустые строки
+		for i=DB.ItemCounter+1,11 do
+			_G["DBUI_Row"..i]:SetHidden(true)
+		end
+    else
+    	-- Показываем слайдер
+    	DBUI_ContainerSlider:SetHidden(false)
+
+    	-- Поправка на начало отсчета с 0
+    	last=last-1
+	    -- Заполнение идёт снизу
+	    for i=11,1,-1 do
+	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle=GetItemLinkInfo(GetItemLink(BAG_BANK,last))
+			_G["DBUI_Row"..i.."ButtonIcon"]:SetTexture(icon)
+			_G["DBUI_Row"..i.."ButtonStackCount"]:SetText(GetSlotStackSize(BAG_BANK,last))
+			_G["DBUI_Row"..i.."Name"]:SetText(GetItemLink(BAG_BANK,last))
+		    if (GetItemStatValue(BAG_BANK,last)~=0) then
+				_G["DBUI_Row"..i.."StatValue"]:SetText(GetItemStatValue(BAG_BANK,last))
+			else
+				_G["DBUI_Row"..i.."StatValue"]:SetText("-")
+			end
+			_G["DBUI_Row"..i.."SellPrice"]:SetText(GetSlotStackSize(BAG_BANK,last)*sellPrice)
+			d()
+			if last<=DB.ItemCounter and last>0 then
+	    		last=last-1
+	    	else
+	    		last=last
+	    	end
+		end
+	end
+
 end
 
 function DB.FillGuildBank(last)
@@ -285,23 +382,47 @@ function DB.FillGuildBank(last)
     end
     DB.CurrentLastValue=last
 
-    -- Заполнение идёт снизу
-    for i=11,1,-1 do
-    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(DB.items.data[last].name)
-		_G["DBUI_Row"..i.."ButtonIcon"]:SetTexture(icon)
-		_G["DBUI_Row"..i.."ButtonStackCount"]:SetText(DB.items.data[last].count)
-		_G["DBUI_Row"..i.."Name"]:SetText(DB.items.data[last].name)
-	    if (DB.items.data[last].statvalue~="0") then
-			_G["DBUI_Row"..i.."StatValue"]:SetText(DB.items.data[last].statvalue)
-		else
-			_G["DBUI_Row"..i.."StatValue"]:SetText("-")
+    if #DB.items.data<11 then
+    	-- Прячем Слайдер
+    	DBUI_ContainerSlider:SetHidden(true)
+	    -- Заполнение идёт сверху
+	    for i=1,#DB.items.data do
+	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(DB.items.data[i].name)
+			_G["DBUI_Row"..i.."ButtonIcon"]:SetTexture(icon)
+			_G["DBUI_Row"..i.."ButtonStackCount"]:SetText(DB.items.data[i].count)
+			_G["DBUI_Row"..i.."Name"]:SetText(DB.items.data[i].name)
+		    if (DB.items.data[i].statvalue~="0") then
+				_G["DBUI_Row"..i.."StatValue"]:SetText(DB.items.data[i].statvalue)
+			else
+				_G["DBUI_Row"..i.."StatValue"]:SetText("-")
+			end
+			_G["DBUI_Row"..i.."SellPrice"]:SetText(DB.items.data[i].count*sellPrice)
 		end
-		_G["DBUI_Row"..i.."SellPrice"]:SetText(DB.items.data[last].count*sellPrice)
-		if last<=#DB.items.data and last>1 then
-    		last=last-1
-    	else
-    		last=11
-    	end
+		-- Прячем пустые строки
+		for i=#DB.items.data+1,11 do
+			_G["DBUI_Row"..i]:SetHidden(true)
+		end
+    else
+    	-- Показываем слайдер
+    	DBUI_ContainerSlider:SetHidden(false)
+	    -- Заполнение идёт снизу
+	    for i=11,1,-1 do
+	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(DB.items.data[last].name)
+			_G["DBUI_Row"..i.."ButtonIcon"]:SetTexture(icon)
+			_G["DBUI_Row"..i.."ButtonStackCount"]:SetText(DB.items.data[last].count)
+			_G["DBUI_Row"..i.."Name"]:SetText(DB.items.data[last].name)
+		    if (DB.items.data[last].statvalue~="0") then
+				_G["DBUI_Row"..i.."StatValue"]:SetText(DB.items.data[last].statvalue)
+			else
+				_G["DBUI_Row"..i.."StatValue"]:SetText("-")
+			end
+			_G["DBUI_Row"..i.."SellPrice"]:SetText(DB.items.data[last].count*sellPrice)
+			if last<=#DB.items.data and last>1 then
+	    		last=last-1
+	    	else
+	    		last=11
+	    	end
+		end
 	end
 end
 
@@ -309,49 +430,10 @@ end
 
 
 function DB.PL_Opened()
-	-- local value=false
-	-- ZO_SharedRightPanelBackground:SetHidden(value)
-	-- ZO_PlayerBank:SetHidden(value)
-	-- ZO_PlayerBankTabs:SetHidden(value)
-	-- ZO_PlayerBankFilterDivider:SetHidden(value)
-	-- ZO_PlayerBankSortBy:SetHidden(value)
-	-- ZO_PlayerBankInfoBar:SetHidden(value)
-	-- ZO_PlayerBankBackpack:SetHidden(value)
-	-- ZO_PlayerBankBackpackScrollBar:SetHidden(value)
-	-- ZO_PlayerBankBackpackContents:SetHidden(value)
-	-- ZO_PlayerBankBackpackLandingArea:SetHidden(value)
-
-	-- db_UI.iTitle:SetHidden(true)
-	-- DBUI_ContainerSlider:SetHidden(true)
- --    for i=1,11 do
-	-- 	_G["DBUI_Row"..i]:SetHidden(true)
-	-- end
-	-- bankshown=true
 end
 
 function DB.PL_Closed()
-	-- d("Player bank closed")
-	-- local value=true
-	-- ZO_SharedRightPanelBackground:SetHidden(value)
-	-- ZO_PlayerBank:SetHidden(value)
-	-- ZO_PlayerBankTabs:SetHidden(value)
-	-- ZO_PlayerBankFilterDivider:SetHidden(value)
-	-- ZO_PlayerBankSortBy:SetHidden(value)
-	-- ZO_PlayerBankInfoBar:SetHidden(value)
-	-- ZO_PlayerBankBackpack:SetHidden(value)
-	-- ZO_PlayerBankBackpackScrollBar:SetHidden(value)
-	-- ZO_PlayerBankBackpackContents:SetHidden(value)
-	-- ZO_PlayerBankBackpackLandingArea:SetHidden(value)
 
-	-- db_UI.iTitle:SetHidden(value)
-	-- DBUI_ContainerSlider:SetHidden(value)
- --    for i=1,11 do
-	-- 	_G["DBUI_Row"..i]:SetHidden(value)
-	-- end
-	-- for i=1,12 do
-	-- 	_G["ZO_PlayerBankBackpack1Row"..i]:SetHidden(value)
-	-- end
-	-- bankshown=false
 end
 
 function DB.GB_Opened()
@@ -492,10 +574,10 @@ end
 function DB.Update(self)
 if (not DB.AddonReady) then return end
 
-	local menuHidden = ZO_GameMenu_InGame:IsHidden()
+	local EscMenuHidden = ZO_GameMenu_InGame:IsHidden()
 	local interactHidden = ZO_InteractWindow:IsHidden()
 
-	if (menuHidden == false) then
+	if (EscMenuHidden == false) then
 		DBUI_Container:SetHidden(true)
 		DBUI_Menu:SetHidden(true)
 	elseif (interactHidden == false) then
