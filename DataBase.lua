@@ -1,23 +1,37 @@
 --	DataBase v0.01
 ----------------------------
 --	Список команд:
--- /db bag - список сумок
--- /db ic - список инвентаря
--- /db bc - список банка
+-- /db cls - очистить собраные данные
 ----------------------------
+-- Сделать: тултипы, подсветку, занято/свободно
+
+-- Пригодится: 
+-- WINDOW_MANAGER:GetMouseOverControl()
+-- ZO_FeedbackPanel - "loading...  - смотреть инвентарь когда она исчезла?
+
+
+
 DB = { }
 
-DB.version=0.03
+DB.version=0.20
 
-DB.dataDefault = {
+DB.dataDefaultItems = {
     data = {}
 }
 
-DB.UI_Movable=false
+for i=1,GetNumGuilds() do
+	DB.dataDefaultItems.data[GetGuildName(i)]={}
+end 
 
-local ShowInfo = true
-local startupTS		= GetGameTimeMilliseconds()
-local EventItemreadyHack=0
+DB.dataDefaultParams = {
+	DBUI_Menu = {10,10},
+	DBUI_Container = {530,380}
+}
+
+DB.UI_Movable=false
+DB.AddonReady=false
+DB.TempData={}
+DB.GCountOnUpdateTimer=0
 
 function DB.OnLoad(eventCode, addOnName)
 	if (addOnName ~= "DataBase" ) then return end
@@ -27,70 +41,82 @@ function DB.OnLoad(eventCode, addOnName)
 
 	--Регистрация эвентов
 	EVENT_MANAGER:RegisterForEvent("DataBase", EVENT_OPEN_BANK, DB.PL_Opened)
+	EVENT_MANAGER:RegisterForEvent("DataBase", EVENT_CLOSE_BANK, DB.PL_Closed)
 	-- EVENT_MANAGER:RegisterForEvent("DataBase", EVENT_GUILD_BANK_SELECTED, DB.GB_Selected)
 	EVENT_MANAGER:RegisterForEvent("DataBase", EVENT_OPEN_GUILD_BANK, DB.GB_Opened)
 	EVENT_MANAGER:RegisterForEvent("DataBase", EVENT_GUILD_BANK_ITEMS_READY, DB.GB_Ready)
 
 	--Загрузка сохраненных переменных
-	DB.items= ZO_SavedVars:New( "DB_SavedVars" , 2, "items" , DB.dataDefault , nil )
-
-	--Всё подгружается из базы, скроллится и перемещается. 
-	--Минусы: некликабельные строки, нет картинок, неудобное восприятие информации
-
-	-- Полезные функции: 
-	--		Можно получить иконку и стоимость
-	-- 		GetItemLinkInfo(string itemLink)
-	--		
-	--		Отображение тултипа из базы (/script d(db_UI.Tooltip:SetLink(DB.items.data[2].name)))
-	--		SetLink(string aLink)
+	DB.items= ZO_SavedVars:New( "DB_SavedVars" , 2, "items" , DB.dataDefaultItems, nil )
+	DB.params= ZO_SavedVars:New( "DB_SavedVars" , 2, "params" , DB.dataDefaultParams, nil )
 
 	--Инициализация графического интерфейся
 	db_UI = WINDOW_MANAGER:CreateTopLevelWindow("DBUI")
-	db_UI.BG = WINDOW_MANAGER:CreateControl("DBUI_BG",DBUI,CT_BACKDROP)
-	db_UI.Title = WINDOW_MANAGER:CreateControl("DBUI_Title",DBUI,CT_LABEL)
-	db_UI.Items = WINDOW_MANAGER:CreateControl("DBUI_Items",DBUI,CT_LABEL)
-	db_UI.TB = WINDOW_MANAGER:CreateControl("DBUI_TB",DBUI,CT_TEXTBUFFER)
-	db_UI.Slider = WINDOW_MANAGER:CreateControl("DBUI_Slider",DBUI_TB,CT_SLIDER)
-	db_UI.Tooltip = WINDOW_MANAGER:CreateControl("DBUI_Tooltip",DBUI,CT_TOOLTIP)
-	db_UI.Button_Guild = WINDOW_MANAGER:CreateControl("DBUI_BtG",DBUI,CT_BUTTON)
-	db_UI.Button_Player = WINDOW_MANAGER:CreateControl("DBUI_BtP",DBUI,CT_BUTTON)
-	db_UI.Button_MoveOff = WINDOW_MANAGER:CreateControl("DBUI_MO",DBUI,CT_BUTTON)
+
+	-- Создаем меню
+	DB.CreateMenu()
+	-- Создаем банк
+	DB.CreateBank()
+
+	DB.AddonReady=true
+end
+
+
+function DB.CreateMenu()
+	db_UI.Menu=WINDOW_MANAGER:CreateControl("DBUI_Menu",DBUI,CT_CONTROL)
+	db_UI.Menu.BG = WINDOW_MANAGER:CreateControl("DBUI_Menu_BG",DBUI_Menu,CT_BACKDROP)
+	db_UI.Menu.Title = WINDOW_MANAGER:CreateControl("DBUI_Menu_Title",DBUI_Menu,CT_LABEL)
+	db_UI.Menu.Button={}
+	db_UI.Menu.Button.Guild = WINDOW_MANAGER:CreateControl("DBUI_Menu_Button_Guild",DBUI_Menu,CT_BUTTON)
+	db_UI.Menu.Button.Player = WINDOW_MANAGER:CreateControl("DBUI_Menu_Button_Player",DBUI_Menu,CT_BUTTON)
+	db_UI.Menu.Button.Move = WINDOW_MANAGER:CreateControl("DBUI_Menu_Button_Move",DBUI_Menu,CT_BUTTON)
 
 	--Обработчики событий
-	--Прокрутка слайдера и буфера колёсиком
-	db_UI:SetHandler("OnMouseWheel", 
-	function(self,delta)
-		db_UI.TB:SetScrollPosition(DBUI_TB:GetScrollPosition() + delta)
-		db_UI.Slider:SetValue(db_UI.Slider:GetValue()- delta)
-	end)
 
     -- Клик по гильдии
-    db_UI.Button_Guild:SetHandler( "OnClicked" , function(self)
-    	db_UI.TB:Clear()
-    	DB.DisplayGuildBank()
+    db_UI.Menu.Button.Guild:SetHandler( "OnClicked" , function(self)
+    	local bool = not(DBUI_Container:IsHidden())
+    	DB.CurrentLastValue=11
+
+    	if DBUI_Container:IsHidden() then
+    		DB.PrepareBankValues("Guild")
+    		DB.FillBank(DB.CurrentLastValue)
+    	end
+    	DB.HideContainer(bool)
     end )
 
     -- Клик по игроку
-    db_UI.Button_Player:SetHandler( "OnClicked" , function(self)
-    	db_UI.TB:Clear()
-    	DB.DisplayPlayerBank()
+    db_UI.Menu.Button.Player:SetHandler( "OnClicked" , function(self)
+    	local bool = not(DBUI_Container:IsHidden())
+    	DB.CurrentLastValue=11
+
+    	if DBUI_Container:IsHidden() then
+			DB.PrepareBankValues("Player")
+	    	DB.FillBank(DB.CurrentLastValue)
+    	end
+    	DB.HideContainer(bool)
     end )
 
     -- Клик по M
-    db_UI.Button_MoveOff:SetHandler( "OnClicked" , function(self)
+    db_UI.Menu.Button.Move:SetHandler( "OnClicked" , function(self)
     	if DB.UI_Movable then
-    		db_UI:SetMovable(true)
+    		db_UI.Menu:SetMovable(true)
+    		DBUI_Container:SetMovable(true)
     		DB.UI_Movable=false
     	else
-    		db_UI:SetMovable(false)
+    		db_UI.Menu:SetMovable(false)
+    		DBUI_Container:SetMovable(false)
     		DB.UI_Movable=true
     	end
     end )
 
-	--Общие настройки интерфейса
-	db_UI:SetAnchor(TOPLEFT,GuiRoot,TOPLEFT,10,10)
-	db_UI:SetDimensions(300,245)
-	db_UI:SetMouseEnabled(true)
+    DBUI_Menu:SetHandler("OnMouseUp" , function(self) DB.MouseUp(self) end)
+    DBUI_Container:SetHandler("OnMouseUp" , function(self) DB.MouseUp(self) end)
+
+	--Настройки меню
+	db_UI.Menu:SetAnchor(TOPLEFT,DBUI,TOPLEFT,DB.params.DBUI_Menu[1],DB.params.DBUI_Menu[2])
+	db_UI.Menu:SetDimensions(200,50)
+	db_UI.Menu:SetMouseEnabled(true)
 
     if DB.UI_Movable then
 		db_UI:SetMovable(true)
@@ -101,275 +127,383 @@ function DB.OnLoad(eventCode, addOnName)
 	end
 
 	--Фон
-	db_UI.BG:SetDimensions(300,245)
-	db_UI.BG:SetCenterColor(0,0,0,1)
-	db_UI.BG:SetEdgeColor(0,0,0,1)
-	db_UI.BG:SetEdgeTexture("", 8, 1, 1)
-	db_UI.BG:SetAlpha(0.5)
-	db_UI.BG:SetAnchor(BOTTOM,DBUI,BOTTOM,0,0)
+	db_UI.Menu.BG:SetAnchor(BOTTOM,DBUI_Menu,BOTTOM,0,0)
+	db_UI.Menu.BG:SetDimensions(200,50)
+	db_UI.Menu.BG:SetCenterColor(0,0,0,1)
+	db_UI.Menu.BG:SetEdgeColor(0,0,0,1)
+	db_UI.Menu.BG:SetEdgeTexture("", 8, 1, 1)
+	db_UI.Menu.BG:SetAlpha(0.5)
 
 	--Заголовок
-	db_UI.Title:SetFont("ZoFontGame" )
-	db_UI.Title:SetColor(255,255,255,1.5)
-	db_UI.Title:SetText( "|cff8000Bank Storage|" )
-	db_UI.Title:SetAnchor(TOP,DBUI,TOP,0,0)
-
-	--Выводим число вещей в инвентаре:
-	db_UI.Items:SetFont("ZoFontGame" )
-	db_UI.Items:SetColor(255,255,255,1.5)
-	db_UI.Items:SetAnchor(TOPLEFT,DBUI,TOPLEFT,10,20)
-
-	--Текстовый буфер
-	db_UI.TB:SetDimensions(275,200)
-	db_UI.TB:SetFont( "ZoFontGame" )
-	db_UI.TB:SetAnchor(BOTTOM,DBUI,BOTTOM,0,-5)
-	db_UI.TB:SetLinkEnabled(true)
-
-	--Подсказка
-	-- db_UI.Tooltip:SetDimensions(425,345)
-	-- db_UI.Tooltip:SetFont( "ZoFontGame" )
-	-- db_UI.Tooltip:SetAnchor(BOTTOM,DBUI,BOTTOM,50,50)
-
-	--Слайдер
-	-- /script db_UI.Slider:SetBackgroundBottomTexture("", 8, 1, 1)
-	local tex = "/esoui/art/miscellaneous/scrollbox_elevator.dds"
-
-    db_UI.Slider:SetWidth(22)
-	db_UI.Slider:SetOrientation(ORIENTATION_VERTICAL)
-	db_UI.Slider:SetThumbTexture(tex, tex, tex, 22, 100, 0, 0, 1, 1)
-	db_UI.Slider:SetAnchor(BOTTOMRIGHT,db_UI,BOTTOMRIGHT,0,0)
-	db_UI.Slider:SetMouseEnabled(true)
-	db_UI.Slider:SetHeight(245)
-	db_UI.Slider:SetValueStep(1)
+	db_UI.Menu.Title:SetAnchor(TOP,DBUI_Menu,TOP,0,0)
+	db_UI.Menu.Title:SetFont("ZoFontGame" )
+	db_UI.Menu.Title:SetColor(255,255,255,1.5)
+	db_UI.Menu.Title:SetText( "|cff8000Bank Storage|" )
 
 	-- Кнопка "Гильдия"
-	db_UI.Button_Guild:SetText("[Guild]")
-	db_UI.Button_Guild:SetAnchor(TOP,DBUI,TOPRIGHT,-150,20)
-	db_UI.Button_Guild:SetDimensions(70,25)
-	db_UI.Button_Guild:SetFont("ZoFontGameBold")
-	db_UI.Button_Guild:SetNormalFontColor(0,255,255,.7)
-	db_UI.Button_Guild:SetMouseOverFontColor(0.8,0.4,0,1)
+	db_UI.Menu.Button.Guild:SetAnchor(TOP,DBUI_Menu,TOPRIGHT,-150,20)
+	db_UI.Menu.Button.Guild:SetText("[Guild]")
+	db_UI.Menu.Button.Guild:SetDimensions(70,25)
+	db_UI.Menu.Button.Guild:SetFont("ZoFontGameBold")
+	db_UI.Menu.Button.Guild:SetNormalFontColor(0,255,255,.7)
+	db_UI.Menu.Button.Guild:SetMouseOverFontColor(0.8,0.4,0,1)
 
 	-- Кнопка "Игрок"
-	db_UI.Button_Player:SetText("[Player]")
-	db_UI.Button_Player:SetAnchor(TOP,DBUI,TOPRIGHT,-90,20)
-	db_UI.Button_Player:SetDimensions(70,25)
-	db_UI.Button_Player:SetFont("ZoFontGameBold")
-	db_UI.Button_Player:SetNormalFontColor(0,255,255,.7)
-	db_UI.Button_Player:SetMouseOverFontColor(0.8,0.4,0,1)
+	db_UI.Menu.Button.Player:SetAnchor(TOP,DBUI_Menu,TOPRIGHT,-90,20)
+	db_UI.Menu.Button.Player:SetText("[Player]")
+	db_UI.Menu.Button.Player:SetDimensions(70,25)
+	db_UI.Menu.Button.Player:SetFont("ZoFontGameBold")
+	db_UI.Menu.Button.Player:SetNormalFontColor(0,255,255,.7)
+	db_UI.Menu.Button.Player:SetMouseOverFontColor(0.8,0.4,0,1)
 
 	-- Кнопка "M"
-	db_UI.Button_MoveOff:SetText("[M]")
-	db_UI.Button_MoveOff:SetAnchor(TOP,DBUI,TOPRIGHT,-40,20)
-	db_UI.Button_MoveOff:SetDimensions(40,25)
-	db_UI.Button_MoveOff:SetFont("ZoFontGameBold")
-	db_UI.Button_MoveOff:SetNormalFontColor(0,255,255,.7)
-	db_UI.Button_MoveOff:SetMouseOverFontColor(0.8,0.4,0,1)
-	
-
-
-	--Отображение
-	db_UI.Items.Item={}
-	db_UI.Items.Item.name ={}
-	db_UI.Items.Item.count ={}
-
-	--Отображение Гильбанка по умолчанию
-	DB.DisplayGuildBank()
+	db_UI.Menu.Button.Move:SetAnchor(TOP,DBUI_Menu,TOPRIGHT,-40,20)
+	db_UI.Menu.Button.Move:SetText("[M]")
+	db_UI.Menu.Button.Move:SetDimensions(40,25)
+	db_UI.Menu.Button.Move:SetFont("ZoFontGameBold")
+	db_UI.Menu.Button.Move:SetNormalFontColor(0,255,255,.7)
+	db_UI.Menu.Button.Move:SetMouseOverFontColor(0.8,0.4,0,1)
 end
 
-	function DB.DisplayGuildBank()
-		if (#DB.items.data==0) then return end
+function DB.CreateBank()
+	local OldAnchor=false
 
-		--Обновляем изменяемые значения
-		db_UI.Items:SetText("ItemsTotal: "..#DB.items.data)
-		db_UI.Slider:SetMinMax(1,#DB.items.data)
-    	db_UI.Slider:SetValue(#DB.items.data)
-		db_UI.TB:SetMaxHistoryLines(#DB.items.data)
-		db_UI.TB:SetScrollPosition(0)
+	--Настройки контейнера
+	DBUI_Container:SetParent(DBUI)
+	DBUI_Container:SetAnchor(TOPLEFT,GuiRoot,TOPLEFT,DB.params.DBUI_Container[1],DB.params.DBUI_Container[2])
+	DBUI_Container:SetDimensions(560,640)
+	DBUI_Container:SetMouseEnabled(true)
+	DBUI_Container:SetHidden(true)
 
-		--Прокрутка буфера ползунком слайдера
-		db_UI.Slider:SetHandler("OnValueChanged", 
-		function(self, val, eventReason)
-	       db_UI.TB:SetScrollPosition(#DB.items.data-val)
-	    end)
+    -- Фон
+    DBUI_ContainerBg:SetAnchor(TOPLEFT,DBUI_Container,TOPLEFT,10,0)
+    DBUI_ContainerBg:SetCenterColor(0,0,0,0.5)
+    DBUI_ContainerBg:SetEdgeColor(0,0,0,0.5)
+    DBUI_ContainerBg:SetDimensions(DBUI_Container:GetDimensions())
 
-		for i=1, #DB.items.data, 1 do
-			db_UI.TB:AddMessage(i.."|| "..DB.items.data[i].count.." || "..DB.items.data[i].name)
+	-- + Правим заголовок 
+	DBUI_ContainerTitle:SetAnchor(TOP,DBUI_Container,TOP,0,15)
+	DBUI_ContainerTitle:SetFont("ZoFontGame")
+	DBUI_ContainerTitle:SetText( "|cff8000Offline Bank Storage|" )
+	DBUI_ContainerTitle:SetHeight(150)
 
-			-- --Название
-			-- db_UI.Items.Item.name[i] = WINDOW_MANAGER:CreateControl("DBUI_Item_name_"..i,DBUI,CT_LABEL)
-			-- db_UI.Items.Item.name[i]:SetFont("ZoFontGame" )
-			-- db_UI.Items.Item.name[i]:SetColor(255,255,255,1.5)
-			-- db_UI.Items.Item.name[i]:SetText(DB.items.data[i].name)
-			-- db_UI.Items.Item.name[i]:SetAnchor(TOPLEFT,DBUI,TOPLEFT,20,20+i*20)
+	-- + Правим Слайдер
+    DBUI_ContainerSlider:SetAnchor(BOTTOM,DBUI_Container,BOTTOMRIGHT,0,-15)
+    DBUI_ContainerSlider:SetValue(11)
+    DBUI_ContainerSlider:SetWidth(ZO_PlayerBankBackpackScrollBar:GetWidth())
+    DBUI_ContainerSlider:SetHeight(550)
+    DBUI_ContainerSlider:SetAllowDraggingFromThumb(true)
 
-			-- --Количество
-			-- db_UI.Items.Item.name[i] = WINDOW_MANAGER:CreateControl("DBUI_Item_count_"..i,DBUI,CT_LABEL)
-			-- db_UI.Items.Item.name[i]:SetFont("ZoFontGame" )
-			-- db_UI.Items.Item.name[i]:SetColor(255,255,255,1.5)
-			-- db_UI.Items.Item.name[i]:SetText(DB.items.data[i].count)
-			-- db_UI.Items.Item.name[i]:SetAnchor(TOPLEFT,DBUI,TOPLEFT,300,20+i*20)
+	for i = 1, 11 do
+	    local dynamicControl = CreateControlFromVirtual("DBUI_Row", DBUI_Container, "TemplateRow",i)
+	    -- _G[] - позволяет подставлять динамические имена переменных
 
-		end
+	    -- Строка
+	    local fromtop=60
+	    _G["DBUI_Row"..i]:ClearAnchors()
+	    _G["DBUI_Row"..i]:SetAnchor(TOP,DBUI_Container,TOP,0,fromtop+52*(i-1))
+	    _G["DBUI_Row"..i]:SetDimensions (530,52)
+
+
+	    -- Фон
+	    _G["DBUI_Row"..i.."Bg"]:SetColor(1,1,1,1)
+	    --На самом деле это хак ('notexture'). Не могу найти нормальную текстуру
+	    _G["DBUI_Row"..i.."Bg"]:SetTexture('notexture')
+	    _G["DBUI_Row"..i.."Bg"]:SetDimensions (549,59)
+	    _G["DBUI_Row"..i.."Bg"]:GetTextureFileDimensions(512,64)
+
+	    -- Кнопка
+		OldAnchor=_G["DBUI_Row"..i.."Button"]:GetParent()
+
+			--Иконка
+			OldAnchor=_G["DBUI_Row"..i.."ButtonIcon"]:GetParent()
+			-- Это не ошибки. Привязки ниже идут к другому якорю.
+			_G["DBUI_Row"..i.."ButtonIcon"]:ClearAnchors()
+		    _G["DBUI_Row"..i.."ButtonIcon"]:SetAnchor(TOPLEFT,OldAnchor,TOPLEFT,0,0)
+		    _G["DBUI_Row"..i.."ButtonIcon"]:SetColor(1,1,1,1)
+		    _G["DBUI_Row"..i.."ButtonIcon"]:SetDimensions (40,40)
+		    _G["DBUI_Row"..i.."ButtonIcon"]:GetTextureFileDimensions(64,64)
+
+		    --Количество
+			_G["DBUI_Row"..i.."ButtonStackCount"]:ClearAnchors()
+		    _G["DBUI_Row"..i.."ButtonStackCount"]:SetAnchor(TOPLEFT,OldAnchor,TOPLEFT,20,20)
+		    _G["DBUI_Row"..i.."ButtonStackCount"]:SetDimensions (38,35)
+
+	    -- Наименование
+		_G["DBUI_Row"..i.."Name"]:ClearAnchors()
+	    _G["DBUI_Row"..i.."Name"]:SetAnchor(CENTERLEFT,OldAnchor,CENTERLEFT,50,15)
+
+
+		-- Отображение статов
+		_G["DBUI_Row"..i.."StatValue"]:ClearAnchors()
+	    _G["DBUI_Row"..i.."StatValue"]:SetAnchor(CENTERLEFT,OldAnchor,CENTERLEFT,380,15)
+
+	    -- Цена
+		_G["DBUI_Row"..i.."SellPrice"]:ClearAnchors()
+	    _G["DBUI_Row"..i.."SellPrice"]:SetAnchor(CENTERLEFT,OldAnchor,CENTERLEFT,480,15)
+
+	    _G["DBUI_Row"..i.."Highlight"]:SetHidden(true)
 	end
+end
 
+function DB.PrepareBankValues(PrepareType)
+	DB.BankValueTable={}
 
-	function DB.DisplayPlayerBank()
-		DB.ItemCounter=0
-		local RealItemNumber=1
+	if PrepareType=="Player" then
+		d("Preparing Player values")
 		bagIcon, bagSlots=GetBagInfo(BAG_BANK)
-
+		DB.ItemCounter=0
 		while (DB.ItemCounter < bagSlots) do
 			if GetItemName(BAG_BANK,DB.ItemCounter)~="" then
-				db_UI.TB:AddMessage(RealItemNumber.."|| "..GetSlotStackSize(BAG_BANK,DB.ItemCounter).." || "..GetItemLink(BAG_BANK,DB.ItemCounter))
-				RealItemNumber=RealItemNumber+1
+
+				--Избавляемся от мусора при сохранении
+				local clearlink=string.gsub(GetItemLink(BAG_BANK,DB.ItemCounter), "(^p)", "")
+				clearlink=string.gsub(clearlink, "(^n)", "")
+
+				local start,finish=string.find(clearlink,'|h.+|h')
+				local nameClear=string.sub(clearlink,start+2,finish-2)
+				local count = GetSlotStackSize(BAG_BANK,DB.ItemCounter)
+				local statvalue = GetItemStatValue(BAG_BANK,DB.ItemCounter)
+				local quality = GetItemInfo(BAG_BANK,DB.ItemCounter)
+
+				local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(clearlink)
+				iconFile=icon
+
+				DB.BankValueTable[#DB.BankValueTable+1]={
+					["link"]=tostring(clearlink),
+					["icon"] = tostring(iconFile),
+					["name"]=tostring(nameClear),
+					["count"]=tostring(count),
+					["statvalue"]=tostring(statvalue),
+					["sellPrice"] = tostring(sellPrice),
+					["quality"] = tostring(quality)
+
+				}
 			end
 			DB.ItemCounter=DB.ItemCounter+1
 		end
-
-		--Обновляем изменяемые значения
-		db_UI.Items:SetText("ItemsTotal: "..RealItemNumber-1)
-		db_UI.Slider:SetMinMax(1,RealItemNumber-1)
-    	db_UI.Slider:SetValue(RealItemNumber-1)
-		db_UI.TB:SetMaxHistoryLines(RealItemNumber-1)
-		db_UI.TB:SetScrollPosition(0)
-
-		--Прокрутка буфера ползунком слайдера
-		db_UI.Slider:SetHandler("OnValueChanged", 
-		function(self, val, eventReason)
-	       db_UI.TB:SetScrollPosition((RealItemNumber-1)-val)
-	    end)
+	elseif PrepareType=="Guild" then
+		d("Preparing Guild values")
+		-- Пока только для первой гильдии
+	    -- local guildname=tostring(GetGuildName(GetSelectedGuildBankId()))
+	    local guildname=tostring(GetGuildName(1))
+		DB.BankValueTable=DB.items.data[guildname]
+	else
+		d("Unknown prepare type: "..tostring(PrepareType))
 	end
 
+    DBUI_ContainerSlider:SetHandler("OnValueChanged",function(self, value, eventReason)
+		DB.FillBank(value)
+    end)
 
-function DB.Update(self)
--- Заготовка для обновления данных
+    for i=1,11 do
+        _G["DBUI_Row"..i]:SetHandler("OnMouseWheel" , function(self, delta)
+	    	local calculatedvalue=DB.CurrentLastValue-delta
+	    	if (calculatedvalue>=11) and (calculatedvalue<=#DB.BankValueTable) then
+	    		DB.FillBank(calculatedvalue)
+	    		DBUI_ContainerSlider:SetValue(calculatedvalue)
+	    	end
+	    end )
+    end
+
+    DB.SortPreparedValues()
+	return DB.BankValueTable
 
 end
 
+function DB.SortPreparedValues()
+
+	function compare(a,b)
+		-- d("a: "..tostring(a["nameClear"])..", b: "..tostring(b["nameClear"]))
+		return a["name"]<b["name"]	
+	end
+
+	table.sort(DB.BankValueTable,compare)
+end
+
+function DB.FillBank(last)
+	if last<=1 then d("last<=1") return end
+    if (#DB.BankValueTable==0) then 
+    	d("No data avaliable. Open your bank first.")
+    	DB.HideContainer(true)
+	    	for i=1,11 do
+	    		_G["DBUI_Row"..i]:SetHidden(true)
+	    	end
+    	return 
+	else
+		local texture='/esoui/art/miscellaneous/scrollbox_elevator.dds'
+    	DBUI_ContainerSlider:SetMinMax(11,#DB.BankValueTable)
+    	DBUI_ContainerSlider:SetThumbTexture(texture, texture, texture, 18, (1/#DB.BankValueTable*25000)/3, 0, 0, 1, 1)
+    	for i=1,11 do
+    		_G["DBUI_Row"..i]:SetHidden(false)
+    	end
+    end
+    DB.CurrentLastValue=last
+
+    if #DB.BankValueTable<11 then
+    	-- Прячем Слайдер
+    	DBUI_ContainerSlider:SetHidden(true)
+	    -- Заполнение идёт сверху
+	    for i=1,#DB.BankValueTable do
+	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(DB.BankValueTable[i].link)
+
+	    	d("icon: "..tostring(icon))
+			_G["DBUI_Row"..i.."ButtonIcon"]:SetTexture(DB.BankValueTable[i].icon)
+			_G["DBUI_Row"..i.."ButtonStackCount"]:SetText(DB.BankValueTable[i].count)
+			_G["DBUI_Row"..i.."Name"]:SetText(DB.BankValueTable[i].link)
+		    if (DB.BankValueTable[i].statvalue~="0") then
+				_G["DBUI_Row"..i.."StatValue"]:SetText(DB.BankValueTable[i].statvalue)
+			else
+				_G["DBUI_Row"..i.."StatValue"]:SetText("-")
+			end
+			_G["DBUI_Row"..i.."SellPrice"]:SetText(DB.BankValueTable[i].count*sellPrice)
+		end
+		-- Прячем пустые строки
+		for i=#DB.BankValueTable+1,11 do
+			_G["DBUI_Row"..i]:SetHidden(true)
+		end
+    else
+    	-- Показываем слайдер
+    	DBUI_ContainerSlider:SetHidden(false)
+	    -- Заполнение идёт снизу
+	    for i=11,1,-1 do
+	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(DB.BankValueTable[last].link)
+			_G["DBUI_Row"..i.."ButtonIcon"]:SetTexture(DB.BankValueTable[last].icon)
+			_G["DBUI_Row"..i.."ButtonStackCount"]:SetText(DB.BankValueTable[last].count)
+			_G["DBUI_Row"..i.."Name"]:SetText(DB.BankValueTable[last].link)
+		    if (DB.BankValueTable[last].statvalue~="0") then
+				_G["DBUI_Row"..i.."StatValue"]:SetText(DB.BankValueTable[last].statvalue)
+			else
+				_G["DBUI_Row"..i.."StatValue"]:SetText("-")
+			end
+			_G["DBUI_Row"..i.."SellPrice"]:SetText(DB.BankValueTable[last].count*sellPrice)
+			if last<=#DB.BankValueTable and last>1 then
+	    		last=last-1
+	    	else
+	    		last=11
+	    	end
+		end
+	end
+end
+
+
+
+
 function DB.PL_Opened()
-	d("Player bank opened")
+end
+
+function DB.PL_Closed()
 end
 
 function DB.GB_Opened()
-	d("Guild bank opened")
+	DB.EventHacked=false
 end
 
 function DB.GB_Ready()
-	--хак на срабатываение после второго события
+	--хак на срабатывание только 1 события
 
-	if EventItemreadyHack==1 then 
-
+	if  (not DB.EventHacked) then 
 		DB.gcount()
-
-		EventItemreadyHack=0
-	else
-		EventItemreadyHack=1
+		DB.EventHacked=true
 	end
 end
 
-function DB.GB_Selected(guildid)
-	d("Bank owned by "..guildid.." selected")
-	DB.GuildBankId=GetSelectedGuildBankId()
-	d("GuildBank id: "..DB.GuildBankId)
-end
 
 
 function commandHandler( text )
-	if text=="ic" then
-		DB.icount()
-	elseif text=="bc" then
-		DB.bcount()
-	elseif text=="gc" then
-		DB.gcount()		
+	if text=="cls" then
+		DB.items.data={}
+		DB.params.DBUI_Menu=nil
+		DB.params.DBUI_Container=nil
+		d("All data cleared")
 	else
-		d("/db bag - bags list")
-		d("/db ic - iventory list")
-		d("/db bc - bank list")
-		d("/db gc - guildbank list")
+		d("/db cls - clear all data ")
 	end
-end
-
-function DB.icount()
-	DB.ItemCounter=0
-	bagIcon, bagSlots=GetBagInfo(BAG_BACKPACK)
-
-	for i = bagSlots, 0, -1 do
-		bagSpace = i
-		if CheckInventorySpaceSilently(bagSpace) then break end
-	end
-
-	d("BagSpaceTotal: "..bagSlots)
-	d("BagSpaceFree: "..bagSpace)
-	d("BagSpaceOccupied: "..(bagSlots-bagSpace))
-	d("slot:name:count")
-	
-	while (DB.ItemCounter < bagSlots) do
-		if GetItemName(BAG_BACKPACK,DB.ItemCounter)~="" then
-			d(DB.ItemCounter.." : "..GetItemName(BAG_BACKPACK,DB.ItemCounter).." : "..GetItemTotalCount(BAG_BACKPACK,DB.ItemCounter))
-		end
-		DB.ItemCounter=DB.ItemCounter+1
-	end
-	d("---------------------")
-	d("Items total: "..(bagSlots-bagSpace))
-	d("Slots counted: "..DB.ItemCounter)
-end
-
-function DB.bcount()
-	DB.ItemCounter=0
-	bagIcon, bagSlots=GetBagInfo(BAG_BANK)
-
-	d("BagSpaceTotal: "..bagSlots)
-
-	d("slot:name:count")
-	while (DB.ItemCounter < bagSlots) do
-		if GetItemName(BAG_BANK,DB.ItemCounter)~="" then
-			d(DB.ItemCounter.." : "..GetItemName(BAG_BANK,DB.ItemCounter).." : "..GetSlotStackSize(BAG_BANK,DB.ItemCounter))
-		end
-		DB.ItemCounter=DB.ItemCounter+1
-	end
-	d("---------------------")
-	d("Slots counted: "..DB.ItemCounter)
 end
 
 function DB.gcount()
-
-    local data = {}
-    local dataStr = ""
-    local founditems = false
-
-	--Обнуление сохраненной базы
-    DB.items.data={}
-    
-	local sv = DB.items.data
-    	
-	DB.ItemCounter=0
-	bagIcon, bagSlots=GetBagInfo(BAG_GUILDBANK)
-
-	while (DB.ItemCounter < bagSlots) do
-		if GetItemName(BAG_GUILDBANK,DB.ItemCounter)~="" then
-			d(DB.ItemCounter.." : "..GetItemLink(BAG_GUILDBANK,DB.ItemCounter).." : "..GetSlotStackSize(BAG_GUILDBANK,DB.ItemCounter))
-			founditems=true
-			
-			--Избавляемся от мусора при сохранении
-			local namefine=string.gsub(GetItemLink(BAG_GUILDBANK,DB.ItemCounter), "(^p)", "")
-			namefine=string.gsub(namefine, "(^n)", "")
-
-			sv[#sv+1] = 
-					{
-					 ["name"] = tostring(namefine),
-					 ["count"] = tostring(GetSlotStackSize(BAG_GUILDBANK,DB.ItemCounter))
-					}
-		end
-		DB.ItemCounter=DB.ItemCounter+1
-	end
-	d("---------------------")
-	d("Slots counted: "..DB.ItemCounter)
-	if DB.ItemCounter==bagSlots and founditems==false then
-		d("Found nothing... try again")
+	if not DB.GCountOnUpdateReady then
+		DB.GCountOnUpdateTimer=GetGameTimeMilliseconds()
+		DB.GCountOnUpdateReady=true
 	end
 end
 
+function DB.MouseUp(self)
+	local name = self:GetName()
+    local left = self:GetLeft()
+    local top = self:GetTop()
+
+    if name=="DBUI_Menu" then
+    	d("Menu saved")
+    	DB.params.DBUI_Menu={left,top}
+    elseif name=="DBUI_Container" then
+    	d("Container saved")
+    	DB.params.DBUI_Container={left,top}
+    else
+    	d("Unknown window")
+    end
+end
+
+function DB.Update(self)
+if (not DB.AddonReady) then return end
+
+	local EscMenuHidden = ZO_GameMenu_InGame:IsHidden()
+	local interactHidden = ZO_InteractWindow:IsHidden()
+
+	if (EscMenuHidden == false) then
+		DBUI_Container:SetHidden(true)
+		DBUI_Menu:SetHidden(true)
+	elseif (interactHidden == false) then
+		DBUI_Container:SetHidden(true)
+		DBUI_Menu:SetHidden(true)
+	else
+		DBUI_Menu:SetHidden(false)
+	end
+
+	--Хак на проверку инвентаря спустя Х сек после первого срабатывания эвента
+	if DB.GCountOnUpdateReady and (GetGameTimeMilliseconds()-DB.GCountOnUpdateTimer>=1000) then
+		d("Data saved!")
+	    local sv=false
+	    local guildname=tostring(GetGuildName(GetSelectedGuildBankId()))
+	      	
+		bagIcon, bagSlots=GetBagInfo(BAG_GUILDBANK)
+
+		DB.items.data[guildname]={}
+
+		sv = DB.items.data[guildname]
+
+		for i=1, #ZO_GuildBankBackpack.data do
+			name=ZO_GuildBankBackpack.data[i].data.name
+			count=ZO_GuildBankBackpack.data[i].data.stackCount
+			statValue=ZO_GuildBankBackpack.data[i].data.statValue
+			sellPrice=ZO_GuildBankBackpack.data[i].data.sellPrice
+			quality=ZO_GuildBankBackpack.data[i].data.quality
+			iconFile=ZO_GuildBankBackpack.data[i].data.iconFile
+			slotIndex=ZO_GuildBankBackpack.data[i].data.slotIndex
+			link = GetItemLink(BAG_GUILDBANK,slotIndex)
+			clearlink =string.gsub(link, "(^p)", "")
+			clearlink =string.gsub(clearlink, "(^n)", "")
+
+			sv[#sv+1] = 
+			{
+				["link"] = tostring(clearlink),
+				["icon"] = tostring(iconFile),
+				["name"] = tostring(name),
+				["count"] = tostring(count),
+				["statvalue"] = tostring(statValue),
+				["sellPrice"] = tostring(sellPrice),
+				["quality"] = tostring(quality)
+			}
+		end
+	DB.GCountOnUpdateReady=false
+	end
+
+end
+
+function DB.HideContainer(value)
+	DBUI_Container:SetHidden(value)
+	-- d("GuildBankHideValue: "..tostring(value))
+end
 
 --Инициализация Аддона
 EVENT_MANAGER:RegisterForEvent("DataBase", EVENT_ADD_ON_LOADED, DB.OnLoad)
