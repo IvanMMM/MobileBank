@@ -1,0 +1,6 @@
+## Title: MobileBank
+## APIVersion: 100003
+## SavedVariables: MB_SavedVars
+
+MobileBank.lua
+MobileBank.xml

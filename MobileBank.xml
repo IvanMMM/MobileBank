@@ -1,31 +1,40 @@
 <GuiXml>
 	<Controls>
-		<TopLevelControl name="dbBLANK">
+		<TopLevelControl name="MBUI_Blank">
 			<OnUpdate>
-				DB.Update(self)
+				MB.Update(self)
 			</OnUpdate>
 		</TopLevelControl>
 		<!-- Заготовка отображения информации о предмете -->
-		<Control name="DBUI_Container" mouseEnabled="true">
+		<Control name="MBUI_Container" mouseEnabled="true">
 			<Controls>
 				<!-- Фон -->
 				<Backdrop name="$(parent)Bg">
-					<!-- <AnchorFill/> -->
 				</Backdrop>
 
 				<!-- Заголовок -->
 				<Label name="$(parent)Title" font="ZoFontGame">
-					<!-- <AnchorFill/> -->
+					<Controls>
+						<Control name="$(parent)GuildButtons" font="ZoFontGame" text="Name">
+						</Control>
+
+						<Label name="$(parent)Name" font="ZoFontGame" text="Name">
+						</Label>
+
+						<Label name="$(parent)Stat" font="ZoFontGame" text="Stat">
+						</Label>
+
+						<Label name="$(parent)Value" font="ZoFontGame" text="Value">
+						</Label>
+					</Controls>
 				</Label>
 
 				<!-- Счетчик вещей -->
 				<Label name="$(parent)ItemCounter" font="ZoFontGame" color="white">
-					<AnchorFill/>
 				</Label>
 
 				<!-- Слайдер -->
 				<Slider name="$(parent)Slider" mouseEnabled="true" step="1">
-					<!-- <AnchorFill/> -->
 				</Slider>
 
 			</Controls>
@@ -39,14 +48,9 @@
 				</Texture>
 
 				<!-- Подсветка -->
-				<Texture name="$(parent)Highlight">
+				<Backdrop name="$(parent)Highlight">
 					<AnchorFill/>
-				</Texture>
-
-				<!-- Новый статус -->
-				<Control name="$(parent)NewStatus">
-					<AnchorFill/>
-				</Control>
+				</Backdrop>
 
 				<!-- Кнопка -->
 				<Control name="$(parent)Button">
@@ -76,6 +80,12 @@
 				<Label name="$(parent)SellPrice" font="ZoFontGame" color="white">
 					<AnchorFill/>
 				</Label>
+
+				<!-- Подсказка -->
+				<Tooltip name="$(parent)Tooltip" font="ZoFontGame">
+					<AnchorFill/>
+				</Tooltip>
+
 			</Controls>
 		</Control>
 	</Controls>
