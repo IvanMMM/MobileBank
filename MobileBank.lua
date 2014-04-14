@@ -1,14 +1,14 @@
---	MobileBank v0.25
+--	MobileBank v0.26
 ----------------------------
 --	Список команд:
--- /db cls - очистить собраные данные
+-- /mb cls - очистить собраные данные
 ----------------------------
 
 
 
 MB = { }
 
-MB.version=0.25
+MB.version=0.26
 
 MB.dataDefaultItems = {
     data = {}
@@ -56,7 +56,7 @@ function MB.OnLoad(eventCode, addOnName)
 	EVENT_MANAGER:RegisterForEvent("MobileBank", EVENT_GUILD_BANK_ITEMS_READY, MB.GB_Ready)
 
 	--Загрузка сохраненных переменных
-	MB.items= ZO_SavedVars:New( "MB_SavedVars" , 2, "items" , MB.dataDefaultItems, nil )
+	MB.items= ZO_SavedVars:NewAccountWide( "MB_SavedVars" , 2, "items" , MB.dataDefaultItems, nil )
 	MB.params= ZO_SavedVars:New( "MB_SavedVars" , 2, "params" , MB.dataDefaultParams, nil )
 
 	--Инициализация графического интерфейся
@@ -296,7 +296,7 @@ function MB.CreateBank()
 	    _G["MBUI_Row"..i.."SellPrice"]:SetAnchor(CENTERLEFT,OldAnchor,CENTERLEFT,480,15)
 
 	    _G["MBUI_Row"..i.."Highlight"]:SetEdgeTexture("", 8, 1, 1)
-	    _G["MBUI_Row"..i.."Highlight"]:SetCenterColor(0,0,0,0.5)
+	    _G["MBUI_Row"..i.."Highlight"]:SetCenterColor(0,0,0,0)
 	    _G["MBUI_Row"..i.."Highlight"]:SetEdgeColor(0,0,0,0.5)
 	end
 end
@@ -439,7 +439,7 @@ function MB.FillBank(last)
 			else
 				_G["MBUI_Row"..i.."StatValue"]:SetText("-")
 			end
-			_G["MBUI_Row"..i.."SellPrice"]:SetText(MB.BankValueTable[i].count*sellPrice)
+			_G["MBUI_Row"..i.."SellPrice"]:SetText(MB.BankValueTable[i].count*sellPrice.."|t24:24:EsoUI/Art/currency/currency_gold.dds|t")
 		end
 		-- Заполняем вместимость банка
 		local CurBankCapacity = #MB.BankValueTable
@@ -491,7 +491,7 @@ function MB.FillBank(last)
 			else
 				_G["MBUI_Row"..i.."StatValue"]:SetText("-")
 			end
-			_G["MBUI_Row"..i.."SellPrice"]:SetText(MB.BankValueTable[last].count*sellPrice)
+			_G["MBUI_Row"..i.."SellPrice"]:SetText(MB.BankValueTable[last].count*sellPrice.."|t24:24:EsoUI/Art/currency/currency_gold.dds|t")
 			if last<=#MB.BankValueTable and last>1 then
 	    		last=last-1
 	    	else
