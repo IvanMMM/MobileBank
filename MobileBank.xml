@@ -1,84 +1,135 @@
 <GuiXml>
+	<Animations>
+		<AnimationTimeline name="MBUI_IconAnimation" >
+			<Animations>
+				<SizeAnimation duration="150" startHeight="40" startWidth="40" endHeight="70" endWidth="70" />
+			</Animations>
+		</AnimationTimeline>
+	</Animations>
+
 	<Controls>
+        <!-- Формируем пустышку -->
 		<TopLevelControl name="MBUI_Blank">
 			<OnUpdate>
 				MB.Update(self)
 			</OnUpdate>
 		</TopLevelControl>
-		<!-- Заготовка отображения информации о предмете -->
-		<Control name="MBUI_Container" mouseEnabled="true">
-			<Controls>
-				<!-- Фон -->
-				<Backdrop name="$(parent)Bg">
-				</Backdrop>
 
-				<!-- Заголовок -->
-				<Label name="$(parent)Title" font="ZoFontGame">
-					<Controls>
-						<Control name="$(parent)GuildButtons" font="ZoFontGame" text="Name">
-						</Control>
+		<TopLevelControl name="MBUI">
+		<Controls>
+			<!-- Заготовка отображения информации о предмете -->
+			<Control name="MBUI_Container" mouseEnabled="true" hidden="true">
+				<Dimensions x="560" y="720" />
+				<Controls>
+					<!-- Фон -->
+					<Backdrop name="$(parent)Bg" centerColor="00000000" edgeColor="00000000">
+						<Anchor point="TOPLEFT" relativePoint="TOPLEFT" offsetX="10" offsetY="0"/>
+						<Dimensions x="560" y="720" />
+					</Backdrop>
 
-						<Label name="$(parent)Name" font="ZoFontGame" text="Name">
-						</Label>
+					<Texture name="$(parent)Texture" textureFile="EsoUI/Art/Miscellaneous/centerscreen_left.dds" resizeToFitFile="true">
+						<Anchor point="TOPLEFT" relativePoint="TOPLEFT" offsetX="-40" offsetY="-40"/>
+						<Dimensions x="595" y="940" />
+						<!-- <TextureCoords left="0" right="0" top="0" bottom="0" /> -->
+					</Texture>
 
-						<Label name="$(parent)Stat" font="ZoFontGame" text="Stat">
-						</Label>
+					<!-- Заголовок -->
+					<Label name="$(parent)Title" font="ZoFontGame" text="|cff8000Mobile Bank Storage|">
+						<Dimensions y="150" />
+						<Anchor point="TOP" relativePoint="TOP" offsetX="0" offsetY="15"/>
+						<Controls>
+							<Button name="$(parent)Close" font="ZoFontGame" text="[X]">
+								<Anchor point="TOPRIGHT" relativeTo="MBUI_Container" relativePoint="TOPRIGHT" offsetX="0" offsetY="0"/>
+								<Dimensions x="30" y="30" />
+								<OnClicked>
+									MBUI_Container:SetHidden(true)
+									MB.PreviousButtonClicked=nil
+									MB.LastButtonClicked=nil
+								</OnClicked>
+								<OnInitialized>
+									self:SetNormalFontColor(0,255,255,.7)
+									self:SetMouseOverFontColor(0.8,0.4,0,1)
+								</OnInitialized>
+							</Button>
 
-						<Label name="$(parent)Value" font="ZoFontGame" text="Value">
-						</Label>
-					</Controls>
-				</Label>
+							<Control name="$(parent)GuildButtons" font="ZoFontGame" text="Name">
+							</Control>
 
-				<!-- Счетчик вещей -->
-				<Label name="$(parent)ItemCounter" font="ZoFontGame" color="white">
-				</Label>
+							<Label name="$(parent)Name" font="ZoFontGame" text="Name">
+								<Anchor point="TOP" relativePoint="LEFT" offsetX="-100" offsetY="-15"/>
+							</Label>
 
-				<!-- Слайдер -->
-				<Slider name="$(parent)Slider" mouseEnabled="true" step="1">
-				</Slider>
+							<Label name="$(parent)Stat" font="ZoFontGame" text="Stat">
+								<Anchor point="TOP" relativePoint="CENTER" offsetX="130" offsetY="-15"/>
+							</Label>
 
-			</Controls>
-		</Control>
+							<Label name="$(parent)Value" font="ZoFontGame" text="Value">
+								<Anchor point="TOP" relativePoint="RIGHT" offsetX="155" offsetY="-15"/>
+							</Label>
+						</Controls>
+					</Label>
+
+					<!-- Счетчик вещей -->
+					<Label name="$(parent)ItemCounter" font="ZoFontGame" color="white">
+						<Anchor point="CENTER" relativePoint="BOTTOM" offsetX="0" offsetY="-17"/>
+					</Label>
+
+					<!-- Слайдер -->
+					<Slider name="$(parent)Slider" mouseEnabled="true" step="1" dragFromThumb="true">
+						<Anchor point="BOTTOM" relativePoint="BOTTOMRIGHT" offsetX="-10" offsetY="-50"/>
+						<Dimensions x="16" y="565" />
+					</Slider>
+
+				</Controls>
+			</Control>
+		</Controls>
+		</TopLevelControl>
+
+		<!-- Строка -->
 		<Control name="TemplateRow" virtual="true" mouseEnabled="true">
-			<AnchorFill/>
+			<Dimensions x="530" y="52" />
 			<Controls>
 				<!-- Фон -->
-				<Texture name="$(parent)Bg">
+				<Texture name="$(parent)Bg" color="000000" alpha="0.5">
 					<AnchorFill/>
+					<Dimensions x="549" y="59" />
 				</Texture>
 
 				<!-- Подсветка -->
-				<Backdrop name="$(parent)Highlight">
-					<AnchorFill/>
-				</Backdrop>
+                <Texture name="$(parent)Highlight" textureFile="EsoUI/Art/Miscellaneous/listItem_highlight.dds" alpha="0">
+                    <AnchorFill />
+                    <TextureCoords left="0" right="1" top="0" bottom=".625" />
+                </Texture>
 
 				<!-- Кнопка -->
 				<Control name="$(parent)Button">
 					<AnchorFill/>
 					<Controls>
 						<Texture name="$(parent)Icon">
-							<AnchorFill/>
+							<Anchor point="CENTER" relativePoint="LEFT" offsetX="20" offsetY="0"/>
+							<Dimensions x="40" y="40" />
 						</Texture>
 
-						<Label name="$(parent)StackCount" font="ZoFontGame" color="white">
-							<AnchorFill/>
+						<Label name="$(parent)StackCount" font="ZoFontGame" horizontalAlignment="RIGHT">
+							<Anchor point="TOPLEFT" relativePoint="TOPLEFT" offsetX="0" offsetY="20"/>
+							<Dimensions x="38" y="35"/>
 						</Label>
 					</Controls>
 				</Control>
 
 				<!-- Имя -->
-				<Label name="$(parent)Name" font="ZoFontGame" color="white">
-					<AnchorFill/>
+				<Label name="$(parent)Name" font="ZoFontGame">
+					<Anchor point="CENTERLEFT" relativePoint="CENTERLEFT" offsetX="50" offsetY="15"/>
 				</Label>
 
 				<!-- Значение -->
-				<Label name="$(parent)StatValue" font="ZoFontGame" color="white">
-					<AnchorFill/>
+				<Label name="$(parent)StatValue" font="ZoFontGame">
+					<Anchor point="CENTERLEFT" relativePoint="CENTERLEFT" offsetX="380" offsetY="15"/>
 				</Label>
 
 				<!-- Цена -->
-				<Label name="$(parent)SellPrice" font="ZoFontGame" color="white">
-					<AnchorFill/>
+				<Label name="$(parent)SellPrice" font="ZoFontGame">
+					<Anchor point="CENTERLEFT" relativePoint="CENTERLEFT" offsetX="480" offsetY="15"/>
 				</Label>
 
 				<!-- Подсказка -->
