@@ -1,4 +1,4 @@
---	MobileBank v0.31
+--	MobileBank v0.32
 ----------------------------
 --	Список команд:
 -- /mb cls - очистить собраные данные
@@ -12,7 +12,7 @@
 
 MB = {}
 
-MB.version=0.31
+MB.version=0.32
 
 MB.dataDefaultItems = {
 	Guilds={},
@@ -438,14 +438,17 @@ function MB.FillBank(last)
 		    	ZO_ChatWindowTextEntryEditBox:SetText(tostring(ZO_ChatWindowTextEntryEditBox:GetText()).."["..MB.BankValueTable[i].link.."]")
 	    	end)
 		end
-		-- Заполняем вместимость банка
-		local CurBankCapacity = MB.BankValueTable.CurSlots
-		local BankMaxCapacity = MB.BankValueTable.MaxSlots
-		MBUI_ContainerItemCounter:SetText("Bank: "..CurBankCapacity.." / "..BankMaxCapacity)
+
 		-- Прячем пустые строки
 		for i=#MB.BankValueTable+1,11 do
 			_G["MBUI_Row"..i]:SetHidden(true)
 		end
+		-- Заполняем вместимость банка
+		local CurBankCapacity = MB.BankValueTable.CurSlots or #MB.BankValueTable
+		local BankMaxCapacity = MB.BankValueTable.MaxSlots or bagSlots
+
+		MBUI_ContainerItemCounter:SetText("Bank: "..CurBankCapacity.." / "..BankMaxCapacity)
+		MBUI_ContainerItemCounter:SetHidden(false)
     else
     	-- Показываем слайдер
     	MBUI_ContainerSlider:SetHidden(false)
@@ -676,7 +679,6 @@ function MB.SavePlayerInvent()
 	local itemsToCheck=bagSlots
 	while not CheckInventorySpaceSilently(itemsToCheck) do
 		itemsToCheck=itemsToCheck-1
-		d("itemsToCheckForNow:"..tostring(itemsToCheck))
 	end
 
 	MB.items.Chars[thisCharName].CurSlots=bagSlots-itemsToCheck
