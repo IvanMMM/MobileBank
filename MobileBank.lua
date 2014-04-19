@@ -1,20 +1,22 @@
---	MobileBank v0.30
+--	MobileBank v0.31
 ----------------------------
 --	Список команд:
 -- /mb cls - очистить собраные данные
 -- /mb hide/show - скрыть/показать главную панель
--- /mb p - Показать банк игрока
+-- /mb b - Показать банк игрока
 -- /mb g - Показать банки гильдий
+-- /mb i - Показать инвентари персонажей
 ----------------------------
 
 
 
 MB = {}
 
-MB.version=0.30
+MB.version=0.31
 
 MB.dataDefaultItems = {
-	Guilds={}
+	Guilds={},
+	Chars={}
 }
 
 for i=1,GetNumGuilds() do
@@ -38,9 +40,10 @@ MB.AddonReady=false
 MB.TempData={}
 MB.GCountOnUpdateTimer=0
 MB.GuildBankIdToPrepare=1
-MB.Dedug=false
+MB.Debug=false
 MB.PreviousButtonClicked=nil
 MB.LastButtonClicked=nil
+MB.CharsName=nil
 
 function debug(text)
 	if MB.Debug then
@@ -60,9 +63,24 @@ function MB.OnLoad(eventCode, addOnName)
 	EVENT_MANAGER:RegisterForEvent("MobileBank", EVENT_OPEN_GUILD_BANK, MB.GB_Opened)
 	EVENT_MANAGER:RegisterForEvent("MobileBank", EVENT_GUILD_BANK_ITEMS_READY, MB.GB_Ready)
 
+	-- Сохранение лута
+	EVENT_MANAGER:RegisterForEvent("MobileBank", EVENT_LOOT_RECEIVED, MB.SavePlayerInvent)
+
 	--Загрузка сохраненных переменных
 	MB.items= ZO_SavedVars:NewAccountWide( "MB_SavedVars" , 2, "Items" , MB.dataDefaultItems, nil )
 	MB.params= ZO_SavedVars:New( "MB_SavedVars" , 2, "Params" , MB.dataDefaultParams, nil )
+
+	thisCharName=GetUnitName("player")
+
+	MB.items.Chars[thisCharName]={}
+
+	MB.CharsName={}
+	for k,v in pairs(MB.items.Chars) do
+		MB.CharsName[#MB.CharsName+1]=k
+	end
+
+	-- Обновляем лут
+	MB.SavePlayerInvent()
 
 	--Инициализация графического интерфейся
 	MB_UI = WINDOW_MANAGER:GetControlByName("MBUI")
@@ -82,7 +100,8 @@ function MB.CreateMenu()
 	MB_UI.Menu.Title = WINDOW_MANAGER:CreateControl("MBUI_Menu_Title",MBUI_Menu,CT_LABEL)
 	MB_UI.Menu.Button={}
 	MB_UI.Menu.Button.Guild = WINDOW_MANAGER:CreateControl("MBUI_Menu_Button_Guild",MBUI_Menu,CT_BUTTON)
-	MB_UI.Menu.Button.Player = WINDOW_MANAGER:CreateControl("MBUI_Menu_Button_Player",MBUI_Menu,CT_BUTTON)
+	MB_UI.Menu.Button.Bank = WINDOW_MANAGER:CreateControl("MBUI_Menu_Button_Bank",MBUI_Menu,CT_BUTTON)
+	MB_UI.Menu.Button.Invent = WINDOW_MANAGER:CreateControl("MBUI_Menu_Button_Invent",MBUI_Menu,CT_BUTTON)
 	-- MB_UI.Menu.Button.Move = WINDOW_MANAGER:CreateControl("MBUI_Menu_Button_Move",MBUI_Menu,CT_BUTTON)
 
 	--Обработчики событий
@@ -100,19 +119,28 @@ function MB.CreateMenu()
     	MB.HideContainer(bool)
     end )
 
-    -- Клик по игроку
-    MB_UI.Menu.Button.Player:SetHandler( "OnClicked" , function(self)
+    -- Клик по банку
+    MB_UI.Menu.Button.Bank:SetHandler( "OnClicked" , function(self)
     	local bool = not(MBUI_Container:IsHidden())
     	MB.PreviousButtonClicked=MB.LastButtonClicked
-		MB.LastButtonClicked="Player"
-
-		if MB.PlayerShown then
-			bool=false
-		end
+		MB.LastButtonClicked="Bank"
 
     	MB.CurrentLastValue=11
 
-		MB.PrepareBankValues("Player")
+		MB.PrepareBankValues("Bank")
+    	MB.FillBank(MB.CurrentLastValue)
+    	MB.HideContainer(bool)
+    end )
+
+    -- Клик по инвентарю
+    MB_UI.Menu.Button.Invent:SetHandler( "OnClicked" , function(self)
+    	local bool = not(MBUI_Container:IsHidden())
+    	MB.PreviousButtonClicked=MB.LastButtonClicked
+		MB.LastButtonClicked="Invent"
+
+    	MB.CurrentLastValue=11
+
+		MB.PrepareBankValues("Invent",1)
     	MB.FillBank(MB.CurrentLastValue)
     	MB.HideContainer(bool)
     end )
@@ -123,13 +151,13 @@ function MB.CreateMenu()
 
 	--Настройки меню
 	MB_UI.Menu:SetAnchor(TOPLEFT,MBUI,TOPLEFT,MB.params.MBUI_Menu[1],MB.params.MBUI_Menu[2])
-	MB_UI.Menu:SetDimensions(130,45)
+	MB_UI.Menu:SetDimensions(200,45)
 	MB_UI.Menu:SetMouseEnabled(true)
 	MB_UI.Menu:SetMovable(true)
 
 	--Фон
 	MB_UI.Menu.BG:SetAnchor(CENTER,MBUI_Menu,CENTER,0,0)
-	MB_UI.Menu.BG:SetDimensions(130,40)
+	MB_UI.Menu.BG:SetDimensions(200,40)
 	MB_UI.Menu.BG:SetCenterColor(0,0,0,1)
 	MB_UI.Menu.BG:SetEdgeColor(0,0,0,0)
 	MB_UI.Menu.BG:SetAlpha(0.5)
@@ -141,20 +169,28 @@ function MB.CreateMenu()
 	MB_UI.Menu.Title:SetText( "|cff8000Mobile Bank|" )
 
 	-- Кнопка "Гильдия"
-	MB_UI.Menu.Button.Guild:SetAnchor(BOTTOM,MBUI_Menu,BOTTOM,-30,0)
+	MB_UI.Menu.Button.Guild:SetAnchor(BOTTOMLEFT,MBUI_Menu,BOTTOMLEFT,0,0)
 	MB_UI.Menu.Button.Guild:SetText("[Guild]")
 	MB_UI.Menu.Button.Guild:SetDimensions(70,25)
 	MB_UI.Menu.Button.Guild:SetFont("ZoFontGameBold")
 	MB_UI.Menu.Button.Guild:SetNormalFontColor(0,255,255,.7)
 	MB_UI.Menu.Button.Guild:SetMouseOverFontColor(0.8,0.4,0,1)
 
-	-- Кнопка "Игрок"
-	MB_UI.Menu.Button.Player:SetAnchor(BOTTOM,MBUI_Menu,BOTTOM,30,0)
-	MB_UI.Menu.Button.Player:SetText("[Player]")
-	MB_UI.Menu.Button.Player:SetDimensions(70,25)
-	MB_UI.Menu.Button.Player:SetFont("ZoFontGameBold")
-	MB_UI.Menu.Button.Player:SetNormalFontColor(0,255,255,.7)
-	MB_UI.Menu.Button.Player:SetMouseOverFontColor(0.8,0.4,0,1)
+	-- Кнопка "Банк"
+	MB_UI.Menu.Button.Bank:SetAnchor(BOTTOM,MBUI_Menu,BOTTOM,0,0)
+	MB_UI.Menu.Button.Bank:SetText("[Bank]")
+	MB_UI.Menu.Button.Bank:SetDimensions(70,25)
+	MB_UI.Menu.Button.Bank:SetFont("ZoFontGameBold")
+	MB_UI.Menu.Button.Bank:SetNormalFontColor(0,255,255,.7)
+	MB_UI.Menu.Button.Bank:SetMouseOverFontColor(0.8,0.4,0,1)
+
+	-- Кнопка "Инвентарь"
+	MB_UI.Menu.Button.Invent:SetAnchor(BOTTOMRIGHT,MBUI_Menu,BOTTOMRIGHT,0,0)
+	MB_UI.Menu.Button.Invent:SetText("[Invent]")
+	MB_UI.Menu.Button.Invent:SetDimensions(70,25)
+	MB_UI.Menu.Button.Invent:SetFont("ZoFontGameBold")
+	MB_UI.Menu.Button.Invent:SetNormalFontColor(0,255,255,.7)
+	MB_UI.Menu.Button.Invent:SetMouseOverFontColor(0.8,0.4,0,1)
 end
 
 function MB.CreateBank()
@@ -194,8 +230,29 @@ function MB.CreateBank()
 			MB.SortPreparedValues()
 			MB.FillBank(11)	
 		 end)
+	end
 
+    -- Создаем кнопки для переключения между Игроками
+	local nextXstep=0
+    for i=1,#MB.CharsName do
 
+    	local charname=tostring(MB.CharsName[i])
+    	WINDOW_MANAGER:CreateControl("MBUI_ContainerTitleInventButton"..i,MBUI_ContainerTitle,CT_BUTTON)
+    	_G["MBUI_ContainerTitleInventButton"..i]:SetParent(MBUI_ContainerTitleInventButtons)
+		_G["MBUI_ContainerTitleInventButton"..i]:SetFont("ZoFontGame" )
+		nextXstep=(MBUI_Container:GetWidth()/#MB.CharsName*i)
+    	_G["MBUI_ContainerTitleInventButton"..i]:SetDimensions(MBUI_Container:GetWidth()/#MB.CharsName,20)
+    	-- Делаем поправку на ширину самой кнопки
+    	_G["MBUI_ContainerTitleInventButton"..i]:SetAnchor(TOP,MBUI_Container,TOPLEFT,nextXstep-_G["MBUI_ContainerTitleInventButton"..i]:GetWidth()/2,40)
+    	_G["MBUI_ContainerTitleInventButton"..i]:SetText("["..charname.."]")
+    	_G["MBUI_ContainerTitleInventButton"..i]:SetNormalFontColor(0,255,255,.7)
+		_G["MBUI_ContainerTitleInventButton"..i]:SetMouseOverFontColor(0.8,0.4,0,1)
+
+		_G["MBUI_ContainerTitleInventButton"..i]:SetHandler( "OnClicked" , function(self)
+			MB.PrepareBankValues("Invent",i)
+			MB.SortPreparedValues()
+			MB.FillBank(11)	
+		 end)
 	end
 
     -- Правим строки (созданы из xml)
@@ -214,15 +271,14 @@ function MB.CreateBank()
 	end
 end
 
-function MB.PrepareBankValues(PrepareType,GuildBankIdToPrepare)
+function MB.PrepareBankValues(PrepareType,IdToPrepare)
 	MB.GuildBankIdToPrepare=GuildBankIdToPrepare
 	MB.BankValueTable={}
-	MB.BankMaxCapacity=0
 
-	if PrepareType=="Player" then
+
+	if PrepareType=="Bank" then
 		debug("Preparing Player values")
 		bagIcon, bagSlots=GetBagInfo(BAG_BANK)
-		MB.BankMaxCapacity=bagSlots
 		MB.ItemCounter=0
 		while (MB.ItemCounter < bagSlots) do
 			if GetItemName(BAG_BANK,MB.ItemCounter)~="" then
@@ -251,15 +307,28 @@ function MB.PrepareBankValues(PrepareType,GuildBankIdToPrepare)
 			end
 			MB.ItemCounter=MB.ItemCounter+1
 		end
+		MB.BankValueTable.CurSlots=#MB.BankValueTable
+		MB.BankValueTable.MaxSlots=bagSlots
+
+		MBUI_ContainerTitleInventButtons:SetHidden(true)
+		MBUI_ContainerTitleGuildButtons:SetHidden(true)
+	elseif PrepareType=="Invent" then
+		debug("Preparing Inventory values")
+
+		local LoadingCharName=MB.CharsName[IdToPrepare]
+
+		MB.BankValueTable=MB.items.Chars[LoadingCharName]
+
+		MBUI_ContainerTitleInventButtons:SetHidden(false)
 		MBUI_ContainerTitleGuildButtons:SetHidden(true)
 	elseif PrepareType=="Guild" then
 		bagIcon, bagSlots=GetBagInfo(BAG_GUILDBANK)
-		MB.BankMaxCapacity=bagSlots
 		debug("Preparing Guild values")
 
-	    local guildname=tostring(GetGuildName(GuildBankIdToPrepare))
-		MB.BankValueTable=MB.items.Guilds[GuildBankIdToPrepare][guildname]
+	    local guildname=tostring(GetGuildName(IdToPrepare))
+		MB.BankValueTable=MB.items.Guilds[IdToPrepare][guildname]
 		
+		MBUI_ContainerTitleInventButtons:SetHidden(true)
 		MBUI_ContainerTitleGuildButtons:SetHidden(false)
 	else
 		debug("Unknown prepare type: "..tostring(PrepareType))
@@ -370,8 +439,9 @@ function MB.FillBank(last)
 	    	end)
 		end
 		-- Заполняем вместимость банка
-		local CurBankCapacity = #MB.BankValueTable
-		MBUI_ContainerItemCounter:SetText("Bank: "..CurBankCapacity.." / "..MB.BankMaxCapacity)
+		local CurBankCapacity = MB.BankValueTable.CurSlots
+		local BankMaxCapacity = MB.BankValueTable.MaxSlots
+		MBUI_ContainerItemCounter:SetText("Bank: "..CurBankCapacity.." / "..BankMaxCapacity)
 		-- Прячем пустые строки
 		for i=#MB.BankValueTable+1,11 do
 			_G["MBUI_Row"..i]:SetHidden(true)
@@ -473,8 +543,10 @@ function MB.FillBank(last)
 	    	end
 		end
 		-- Заполняем вместимость банка
-		local CurBankCapacity = #MB.BankValueTable
-		MBUI_ContainerItemCounter:SetText("Bank: "..CurBankCapacity.." / "..MB.BankMaxCapacity)
+		local CurBankCapacity = MB.BankValueTable.CurSlots or #MB.BankValueTable
+		local BankMaxCapacity = MB.BankValueTable.MaxSlots or bagSlots
+
+		MBUI_ContainerItemCounter:SetText("Bank: "..CurBankCapacity.." / "..BankMaxCapacity)
 		MBUI_ContainerItemCounter:SetHidden(false)
 	end
 end
@@ -504,6 +576,7 @@ end
 function commandHandler( text )
 	if text=="cls" then
 		MB.items.Guilds={}
+		MB.items.Chars={}
 		MB.params.MBUI_Menu=nil
 		MB.params.MBUI_Container=nil
 		ReloadUI()
@@ -515,7 +588,14 @@ function commandHandler( text )
 		MBUI_Menu:SetHidden(false)
 	elseif text=="p" then
     	MB.CurrentLastValue=11
-		MB.PrepareBankValues("Player")
+		MB.PrepareBankValues("Bank")
+		MB.FillBank(MB.CurrentLastValue)
+    	MBUI_Container:SetHidden(false)
+    	MB.PreviousButtonClicked=nil
+		MB.LastButtonClicked=nil
+	elseif text=="i" then
+    	MB.CurrentLastValue=11
+		MB.PrepareBankValues("Invent",1)
 		MB.FillBank(MB.CurrentLastValue)
     	MBUI_Container:SetHidden(false)
     	MB.PreviousButtonClicked=nil
@@ -530,9 +610,10 @@ function commandHandler( text )
 	else
 		d("/mb hide - hide main window")
 		d("/mb show - show main window")
-		d("/mb p - show player bank")
+		d("/mb b - show player bank")
 		d("/mb g - show guild bank")
-		d("/mb cls - clear all data and reloadui ")
+		d("/mb i - show chars inventories")
+		d("/mb cls - clear all data and reloadui")
 	end
 end
 
@@ -557,6 +638,51 @@ function MB.MouseUp(self)
     end
 end
 
+function MB.SavePlayerInvent()
+	bagIcon, bagSlots=GetBagInfo(BAG_BACKPACK)
+	MB.ItemCounter=0
+	debug("ThisCharName: "..tostring(thisCharName))
+	debug("Items in Table Chars:"..tostring(#MB.items.Chars[thisCharName]))
+	MB.items.Chars[thisCharName]={}
+	debug("Items in Table Chars after clean:"..tostring(#MB.items.Chars[thisCharName]))
+
+	while (MB.ItemCounter < bagSlots) do
+		if GetItemName(BAG_BACKPACK,MB.ItemCounter)~="" then
+
+			--Избавляемся от мусора при сохранении
+			local name = zo_strformat(SI_TOOLTIP_ITEM_NAME, GetItemName(BAG_BACKPACK, MB.ItemCounter))
+			local link = GetItemLink(BAG_BACKPACK,MB.ItemCounter)
+			clearlink =string.gsub(link, "|h.+|h", "|h"..tostring(name).."|h")
+
+			local stackCount = GetSlotStackSize(BAG_BACKPACK,MB.ItemCounter)
+			local statValue = GetItemStatValue(BAG_BACKPACK,MB.ItemCounter)
+			local icon, stack, sellPrice, meetsUsageRequirement, locked, equipType, itemStyle, quality = GetItemInfo(BAG_BACKPACK,MB.ItemCounter)
+			local ItemType=GetItemType(BAG_BACKPACK,MB.ItemCounter)
+
+			MB.items.Chars[thisCharName][#MB.items.Chars[thisCharName]+1]={
+				["link"]=tostring(clearlink),
+				["icon"] = tostring(icon),
+				["name"]=tostring(name),
+				["stackCount"]=stackCount,
+				["StatValue"]=statValue,
+				["sellPrice"] = sellPrice,
+				["quality"] = quality,
+				["meetsUsageRequirement"]=meetsUsageRequirement,
+				["ItemType"]=ItemType
+			}
+		end
+		MB.ItemCounter=MB.ItemCounter+1
+	end
+	local itemsToCheck=bagSlots
+	while not CheckInventorySpaceSilently(itemsToCheck) do
+		itemsToCheck=itemsToCheck-1
+		d("itemsToCheckForNow:"..tostring(itemsToCheck))
+	end
+
+	MB.items.Chars[thisCharName].CurSlots=bagSlots-itemsToCheck
+	MB.items.Chars[thisCharName].MaxSlots=bagSlots
+end
+
 function MB.Update(self)
 if (not MB.AddonReady) then return end
 
@@ -578,15 +704,14 @@ if (not MB.AddonReady) then return end
 	--Хак на проверку инвентаря спустя Х сек после первого срабатывания эвента
 	if MB.GCountOnUpdateReady and (GetGameTimeMilliseconds()-MB.GCountOnUpdateTimer>=1000) then
 		MB.GCountOnUpdateReady=false
-	    local guildbankid=GetSelectedGuildBankId()
-	    local guildname=tostring(GetGuildName(guildbankid))
+	    local guildbankid=GetSelectedGuildBankId() or 0
+	    local guildname=tostring(GetGuildName(guildbankid)) or 0
 	    MB.items.Guilds[guildbankid][guildname]={}
 		d("Data saved for "..guildname)
-	    local sv=false
 	      	
 		bagIcon, bagSlots=GetBagInfo(BAG_GUILDBANK)
 
-		sv = MB.items.Guilds[guildbankid][guildname]
+		local sv = MB.items.Guilds[guildbankid][guildname]
 
 		for i=1, #ZO_GuildBankBackpack.data do
 			slotIndex=ZO_GuildBankBackpack.data[i].data.slotIndex
@@ -598,18 +723,8 @@ if (not MB.AddonReady) then return end
 			statValue=ZO_GuildBankBackpack.data[i].data.statValue
 			sellPrice=ZO_GuildBankBackpack.data[i].data.sellPrice
 			quality=ZO_GuildBankBackpack.data[i].data.quality
-			age=ZO_GuildBankBackpack.data[i].data.age
-			bagId=ZO_GuildBankBackpack.data[i].data.bagId
-			equipType=ZO_GuildBankBackpack.data[i].data.equipType
-			isJunk=ZO_GuildBankBackpack.data[i].data.isJunk
-			itemInstanceId=ZO_GuildBankBackpack.data[i].data.itemInstanceId
-			locked=ZO_GuildBankBackpack.data[i].data.locked
 			meetsUsageRequirement=ZO_GuildBankBackpack.data[i].data.meetsUsageRequirement
-			slotType=ZO_GuildBankBackpack.data[i].data.slotType
-			searchData=ZO_GuildBankBackpack.data[i].data.searchData
-			filterData=ZO_GuildBankBackpack.data[i].data.filterData
 			ItemType=GetItemType(BAG_GUILDBANK,slotIndex)
-
 
 			clearlink =string.gsub(link, "|h.+|h", "|h"..tostring(name).."|h")
 
@@ -622,19 +737,12 @@ if (not MB.AddonReady) then return end
 				["statValue"] = statValue,
 				["sellPrice"] = sellPrice,
 				["quality"] = quality,
-				["age"]=quality,
-				["bagId"]=bagId,
-				["equipType"]=equipType,
-				["isJunk"]=isJunk,
-				["itemInstanceId"]=tostring(itemInstanceId),
-				["locked"]=locked,
 				["meetsUsageRequirement"]=meetsUsageRequirement,
-				["slotType"]=slotType,
-				["searchData"]=searchData,
-				["filterData"]=filterData,
 				["ItemType"]=ItemType
 
 			}
+			sv.CurSlots=#ZO_GuildBankBackpack.data
+			sv.MaxSlots=bagSlots
 		end
 	end
 end

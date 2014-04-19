@@ -55,6 +55,9 @@
 							<Control name="$(parent)GuildButtons" font="ZoFontGame" text="Name">
 							</Control>
 
+							<Control name="$(parent)InventButtons" font="ZoFontGame" text="Name">
+							</Control>
+
 							<Label name="$(parent)Name" font="ZoFontGame" text="Name">
 								<Anchor point="TOP" relativePoint="LEFT" offsetX="-100" offsetY="-15"/>
 							</Label>
