@@ -1,4 +1,4 @@
---	MobileBank v0.35
+--	MobileBank v0.36
 ----------------------------
 --	Список команд:
 -- /mb cls - очистить собраные данные
@@ -10,7 +10,7 @@
 
 MB = {}
 
-MB.version=0.35
+MB.version=0.36
 
 MB.dataDefaultItems = {
 	Guilds={},
@@ -259,7 +259,7 @@ function MB.CreateBank()
 	    local dynamicControl = CreateControlFromVirtual("MBUI_Row", MBUI_Container, "TemplateRow",i)
 
 	    -- Строка
-	    local fromtop=180
+	    local fromtop=150
 	    _G["MBUI_Row"..i]:SetAnchor(TOP,MBUI_Container,TOP,0,fromtop+52*(i-1))
 	    -- _G["MBUI_Row"..i]:SetDimensions (530,52)
 
@@ -359,7 +359,7 @@ function MB.FilterInit(self)
 end
 
 function MB.FilterEnter(self)
-	_G[tostring(self:GetName().."TextureHighlight")]:SetAlpha(0.5)
+	_G[tostring(self:GetName().."TextureHighlight")]:SetAlpha(0.75)
 	self.NormalAnimation:PlayFromStart()
 	self.HighlightAnimation:PlayFromStart()
 end
@@ -372,6 +372,7 @@ end
 
 function MB.FilterClicked(self,filtertype)
 	MB.FilterBank(11,filtertype)
+	MBUI_ContainerSlider:SetValue(11)
 
 	for k,v in pairs(MB.FilterChildrens) do
 		_G[v:GetName().."TexturePressed"]:SetAlpha(0)

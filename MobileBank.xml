@@ -26,17 +26,17 @@
 		<Controls>
 			<!-- Заготовка отображения информации о предмете -->
 			<Control name="MBUI_Container" mouseEnabled="true" hidden="true">
-				<Dimensions x="560" y="800" />
+				<Dimensions x="560" y="750" />
 				<Controls>
 					<!-- Фон -->
 					<Backdrop name="$(parent)Bg" centerColor="00000000" edgeColor="00000000">
 						<Anchor point="TOPLEFT" relativePoint="TOPLEFT" offsetX="10" offsetY="0"/>
-						<Dimensions x="560" y="800" />
+						<Dimensions x="560" y="750" />
 					</Backdrop>
 
 					<Texture name="$(parent)Texture" textureFile="EsoUI/Art/Miscellaneous/centerscreen_left.dds" resizeToFitFile="true">
 						<Anchor point="TOPLEFT" relativePoint="TOPLEFT" offsetX="-40" offsetY="-40"/>
-						<Dimensions x="595" y="1020" />
+						<Dimensions x="595" y="975" />
 						<!-- <TextureCoords left="0" right="0" top="0" bottom="0" /> -->
 					</Texture>
 
@@ -67,7 +67,7 @@
 
 							<Control name="$(parent)Filter" mouseEnabled="true">
 								<Dimensions x="560" y="64" />
-								<Anchor point="CENTER" relativePoint="TOP" relativeTo="MBUI_Container" offsetX="0" offsetY="100"/>
+								<Anchor point="CENTER" relativePoint="TOP" relativeTo="MBUI_Container" offsetX="0" offsetY="90"/>
 								<OnInitialized>
 									MB.FilterInit(self)
 								</OnInitialized>
@@ -287,27 +287,27 @@
 							</Control>
 
 							<Label name="$(parent)Name" font="ZoFontGame" text="Name">
-								<Anchor point="TOP" relativePoint="LEFT" offsetX="-100" offsetY="65"/>
+								<Anchor point="TOP" relativePoint="LEFT" offsetX="-100" offsetY="35"/>
 							</Label>
 
 							<Label name="$(parent)Stat" font="ZoFontGame" text="Stat">
-								<Anchor point="TOP" relativePoint="CENTER" offsetX="130" offsetY="65"/>
+								<Anchor point="TOP" relativePoint="CENTER" offsetX="130" offsetY="35"/>
 							</Label>
 
 							<Label name="$(parent)Value" font="ZoFontGame" text="Value">
-								<Anchor point="TOP" relativePoint="RIGHT" offsetX="155" offsetY="65"/>
+								<Anchor point="TOP" relativePoint="RIGHT" offsetX="155" offsetY="35"/>
 							</Label>
 						</Controls>
 					</Label>
 
 					<!-- Счетчик вещей -->
 					<Label name="$(parent)ItemCounter" font="ZoFontGame" color="white">
-						<Anchor point="CENTER" relativePoint="BOTTOM" offsetX="0" offsetY="-17"/>
+						<Anchor point="CENTER" relativePoint="BOTTOM" offsetX="0" offsetY="-10"/>
 					</Label>
 
 					<!-- Слайдер -->
 					<Slider name="$(parent)Slider" mouseEnabled="true" step="1" dragFromThumb="true">
-						<Anchor point="BOTTOM" relativePoint="BOTTOMRIGHT" offsetX="-10" offsetY="-50"/>
+						<Anchor point="BOTTOM" relativePoint="BOTTOMRIGHT" offsetX="-10" offsetY="-30"/>
 						<Dimensions x="16" y="565" />
 					</Slider>
 
