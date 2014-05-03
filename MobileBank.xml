@@ -5,6 +5,13 @@
 				<SizeAnimation duration="150" startHeight="40" startWidth="40" endHeight="70" endWidth="70" />
 			</Animations>
 		</AnimationTimeline>
+
+		<AnimationTimeline name="MBUI_FilterAnimation" >
+			<Animations>
+				<SizeAnimation duration="150" startHeight="64" startWidth="64" endHeight="80" endWidth="80" />
+			</Animations>
+		</AnimationTimeline>
+
 	</Animations>
 
 	<Controls>
@@ -19,17 +26,17 @@
 		<Controls>
 			<!-- Заготовка отображения информации о предмете -->
 			<Control name="MBUI_Container" mouseEnabled="true" hidden="true">
-				<Dimensions x="560" y="720" />
+				<Dimensions x="560" y="800" />
 				<Controls>
 					<!-- Фон -->
 					<Backdrop name="$(parent)Bg" centerColor="00000000" edgeColor="00000000">
 						<Anchor point="TOPLEFT" relativePoint="TOPLEFT" offsetX="10" offsetY="0"/>
-						<Dimensions x="560" y="720" />
+						<Dimensions x="560" y="800" />
 					</Backdrop>
 
 					<Texture name="$(parent)Texture" textureFile="EsoUI/Art/Miscellaneous/centerscreen_left.dds" resizeToFitFile="true">
 						<Anchor point="TOPLEFT" relativePoint="TOPLEFT" offsetX="-40" offsetY="-40"/>
-						<Dimensions x="595" y="940" />
+						<Dimensions x="595" y="1020" />
 						<!-- <TextureCoords left="0" right="0" top="0" bottom="0" /> -->
 					</Texture>
 
@@ -58,16 +65,237 @@
 							<Control name="$(parent)InventButtons" font="ZoFontGame" text="Name">
 							</Control>
 
+							<Control name="$(parent)Filter" mouseEnabled="true">
+								<Dimensions x="560" y="64" />
+								<Anchor point="CENTER" relativePoint="TOP" relativeTo="MBUI_Container" offsetX="0" offsetY="100"/>
+								<OnInitialized>
+									MB.FilterInit(self)
+								</OnInitialized>
+								<Controls>
+									<!-- Фильтр: All -->
+									<Control name="$(parent)All" mouseEnabled="true">
+										<Anchor point="CENTER" relativePoint="CENTER" offsetX="-210" offsetY="0"/>
+										<Dimensions x="64" y="64" />
+										<Controls>
+											<Texture name="$(parent)TextureNormal" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_all_up.dds" resizeToFitFile="true">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+											<Texture name="$(parent)TexturePressed" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_all_down.dds" resizeToFitFile="true" alpha="0">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+											<Texture name="$(parent)TextureHighlight" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_all_over.dds" resizeToFitFile="true" alpha="0">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+										</Controls>
+
+										<OnMouseEnter>
+											MB.FilterEnter(self)
+										</OnMouseEnter>
+										<OnMouseExit>
+											MB.FilterExit(self)
+										</OnMouseExit>
+
+										<OnMouseUp>
+											MB.FilterClicked(self,"All")
+										</OnMouseUp>
+
+									</Control>
+
+									<!-- Фильтр: Weapon -->
+									<Control name="$(parent)Weapon" mouseEnabled="true">
+										<Anchor point="CENTER" relativePoint="CENTER" offsetX="-140" offsetY="0"/>
+										<Dimensions x="64" y="64" />
+										<Controls>
+											<Texture name="$(parent)TextureNormal" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_weapons_up.dds" resizeToFitFile="true">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+											<Texture name="$(parent)TexturePressed" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_weapons_down.dds" resizeToFitFile="true" alpha="0">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+											<Texture name="$(parent)TextureHighlight" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_weapons_over.dds" resizeToFitFile="true" alpha="0">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+										</Controls>
+										<OnMouseEnter>
+											MB.FilterEnter(self)
+										</OnMouseEnter>
+										<OnMouseExit>
+											MB.FilterExit(self)
+										</OnMouseExit>
+
+										<OnMouseUp>
+											MB.FilterClicked(self,"Weapon")
+										</OnMouseUp>
+									</Control>
+
+									<!-- Фильтр: Apparel -->
+									<Control name="$(parent)Apparel" mouseEnabled="true">
+										<Anchor point="CENTER" relativePoint="CENTER" offsetX="-70" offsetY="0"/>
+										<Dimensions x="64" y="64" />
+										<Controls>
+											<Texture name="$(parent)TextureNormal" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_armor_up.dds" resizeToFitFile="true">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+											<Texture name="$(parent)TexturePressed" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_armor_down.dds" resizeToFitFile="true" alpha="0">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+											<Texture name="$(parent)TextureHighlight" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_armor_over.dds" resizeToFitFile="true" alpha="0">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+										</Controls>
+										<OnMouseEnter>
+											MB.FilterEnter(self)
+										</OnMouseEnter>
+										<OnMouseExit>
+											MB.FilterExit(self)
+										</OnMouseExit>
+
+										<OnMouseUp>
+											MB.FilterClicked(self,"Apparel")
+										</OnMouseUp>
+									</Control>
+
+									<!-- Фильтр: Consumable -->
+									<Control name="$(parent)Consumable" mouseEnabled="true">
+										<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+										<Dimensions x="64" y="64" />
+										<Controls>
+											<Texture name="$(parent)TextureNormal" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_consumables_up.dds" resizeToFitFile="true">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+											<Texture name="$(parent)TexturePressed" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_consumables_down.dds" resizeToFitFile="true" alpha="0">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+											<Texture name="$(parent)TextureHighlight" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_consumables_over.dds" resizeToFitFile="true" alpha="0">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+										</Controls>
+										<OnMouseEnter>
+											MB.FilterEnter(self)
+										</OnMouseEnter>
+										<OnMouseExit>
+											MB.FilterExit(self)
+										</OnMouseExit>
+
+										<OnMouseUp>
+											MB.FilterClicked(self,"Consumable")
+										</OnMouseUp>
+									</Control>
+
+									<!-- Фильтр: Materials -->
+									<Control name="$(parent)Materials" mouseEnabled="true">
+										<Anchor point="CENTER" relativePoint="CENTER" offsetX="70" offsetY="0"/>
+										<Dimensions x="64" y="64" />
+										<Controls>
+											<Texture name="$(parent)TextureNormal" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_crafting_up.dds" resizeToFitFile="true">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+											<Texture name="$(parent)TexturePressed" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_crafting_down.dds" resizeToFitFile="true" alpha="0">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+											<Texture name="$(parent)TextureHighlight" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_crafting_over.dds" resizeToFitFile="true" alpha="0">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+										</Controls>
+										<OnMouseEnter>
+											MB.FilterEnter(self)
+										</OnMouseEnter>
+										<OnMouseExit>
+											MB.FilterExit(self)
+										</OnMouseExit>
+
+										<OnMouseUp>
+											MB.FilterClicked(self,"Materials")
+										</OnMouseUp>
+									</Control>
+
+									<!-- Фильтр: Miscellaceous -->
+									<Control name="$(parent)Miscellaceous" mouseEnabled="true">
+										<Anchor point="CENTER" relativePoint="CENTER" offsetX="140" offsetY="0"/>
+										<Dimensions x="64" y="64" />
+										<Controls>
+											<Texture name="$(parent)TextureNormal" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_misc_up.dds" resizeToFitFile="true">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+											<Texture name="$(parent)TexturePressed" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_misc_down.dds" resizeToFitFile="true" alpha="0">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+											<Texture name="$(parent)TextureHighlight" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_misc_over.dds" resizeToFitFile="true" alpha="0">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+										</Controls>
+										<OnMouseEnter>
+											MB.FilterEnter(self)
+										</OnMouseEnter>
+										<OnMouseExit>
+											MB.FilterExit(self)
+										</OnMouseExit>
+
+										<OnMouseUp>
+											MB.FilterClicked(self,"Miscellaceous")
+										</OnMouseUp>
+									</Control>
+
+									<!-- Фильтр: Junk -->
+									<Control name="$(parent)Junk" mouseEnabled="true">
+										<Anchor point="CENTER" relativePoint="CENTER" offsetX="210" offsetY="0"/>
+										<Dimensions x="64" y="64" />
+										<Controls>
+											<Texture name="$(parent)TextureNormal" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_junk_up.dds" resizeToFitFile="true">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+											<Texture name="$(parent)TexturePressed" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_junk_down.dds" resizeToFitFile="true" alpha="0">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+											<Texture name="$(parent)TextureHighlight" textureFile="EsoUI/Art/Inventory/inventory_tabIcon_junk_over.dds" resizeToFitFile="true" alpha="0">
+												<Anchor point="CENTER" relativePoint="CENTER" offsetX="0" offsetY="0"/>
+												<Dimensions x="64" y="64" />
+											</Texture>
+										</Controls>
+										<OnMouseEnter>
+											MB.FilterEnter(self)
+										</OnMouseEnter>
+										<OnMouseExit>
+											MB.FilterExit(self)
+										</OnMouseExit>
+
+										<OnMouseUp>
+											MB.FilterClicked(self,"Junk")
+										</OnMouseUp>
+									</Control>
+								</Controls>
+							</Control>
+
 							<Label name="$(parent)Name" font="ZoFontGame" text="Name">
-								<Anchor point="TOP" relativePoint="LEFT" offsetX="-100" offsetY="-15"/>
+								<Anchor point="TOP" relativePoint="LEFT" offsetX="-100" offsetY="65"/>
 							</Label>
 
 							<Label name="$(parent)Stat" font="ZoFontGame" text="Stat">
-								<Anchor point="TOP" relativePoint="CENTER" offsetX="130" offsetY="-15"/>
+								<Anchor point="TOP" relativePoint="CENTER" offsetX="130" offsetY="65"/>
 							</Label>
 
 							<Label name="$(parent)Value" font="ZoFontGame" text="Value">
-								<Anchor point="TOP" relativePoint="RIGHT" offsetX="155" offsetY="-15"/>
+								<Anchor point="TOP" relativePoint="RIGHT" offsetX="155" offsetY="65"/>
 							</Label>
 						</Controls>
 					</Label>
@@ -90,6 +318,18 @@
 
 		<!-- Строка -->
 		<Control name="TemplateRow" virtual="true" mouseEnabled="true">
+
+            <OnMouseEnter>
+                MB.TooltipEnter(self)
+            </OnMouseEnter>
+            <OnMouseExit>
+                MB.TooltipExit(self)
+            </OnMouseExit>
+
+            <OnMouseWheel>
+				MB.MoveScrollerWheel(self,delta)
+            </OnMouseWheel>
+
 			<Dimensions x="530" y="52" />
 			<Controls>
 				<!-- Фон -->

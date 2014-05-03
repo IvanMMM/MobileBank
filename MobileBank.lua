@@ -1,18 +1,16 @@
---	MobileBank v0.32
+--	MobileBank v0.35
 ----------------------------
 --	Список команд:
 -- /mb cls - очистить собраные данные
 -- /mb hide/show - скрыть/показать главную панель
--- /mb b - Показать банк игрока
+-- /mb p - Показать банк игрока
 -- /mb g - Показать банки гильдий
 -- /mb i - Показать инвентари персонажей
 ----------------------------
 
-
-
 MB = {}
 
-MB.version=0.32
+MB.version=0.35
 
 MB.dataDefaultItems = {
 	Guilds={},
@@ -20,20 +18,13 @@ MB.dataDefaultItems = {
 }
 
 for i=1,GetNumGuilds() do
-	MB.dataDefaultItems.Guilds[i]=
-		{
-			[GetGuildName(i)]={
-
-			}
-		}
+	MB.dataDefaultItems.Guilds[GetGuildName(i)]={}
 end 
 
 MB.dataDefaultParams = {
 	MBUI_Menu = {10,10},
 	MBUI_Container = {530,380}
 }
-
-MB.GuildNames = {}
 
 MB.UI_Movable=false
 MB.AddonReady=false
@@ -44,8 +35,11 @@ MB.Debug=false
 MB.PreviousButtonClicked=nil
 MB.LastButtonClicked=nil
 MB.CharsName=nil
+MB.GuildsName=nil
+MB.FilterChildrens=nil
+MB.CurrentFilterType="All"
 
-function debug(text)
+ local function debug(text)
 	if MB.Debug then
 		d(text)
 	end
@@ -55,7 +49,7 @@ function MB.OnLoad(eventCode, addOnName)
 	if (addOnName ~= "MobileBank" ) then return end
 
 	--добавляем команду
-	SLASH_COMMANDS["/mb"] = commandHandler
+	SLASH_COMMANDS["/mb"] = MB.commandHandler
 
 	--Регистрация эвентов
 	EVENT_MANAGER:RegisterForEvent("MobileBank", EVENT_OPEN_BANK, MB.PL_Opened)
@@ -77,6 +71,11 @@ function MB.OnLoad(eventCode, addOnName)
 	MB.CharsName={}
 	for k,v in pairs(MB.items.Chars) do
 		MB.CharsName[#MB.CharsName+1]=k
+	end
+
+	MB.GuildsName={}
+	for k,v in pairs(MB.items.Guilds) do
+		MB.GuildsName[#MB.GuildsName+1]=k
 	end
 
 	-- Обновляем лут
@@ -115,7 +114,8 @@ function MB.CreateMenu()
     	MB.CurrentLastValue=11
 
 		MB.PrepareBankValues("Guild",1)
-		MB.FillBank(MB.CurrentLastValue)
+		-- MB.FillBank(MB.CurrentLastValue,MB.BankValueTable)
+		MB.FilterBank(MB.CurrentLastValue,MB.CurrentFilterType)
     	MB.HideContainer(bool)
     end )
 
@@ -128,7 +128,8 @@ function MB.CreateMenu()
     	MB.CurrentLastValue=11
 
 		MB.PrepareBankValues("Bank")
-    	MB.FillBank(MB.CurrentLastValue)
+    	-- MB.FillBank(MB.CurrentLastValue,MB.BankValueTable)
+    	MB.FilterBank(MB.CurrentLastValue,MB.CurrentFilterType)
     	MB.HideContainer(bool)
     end )
 
@@ -141,7 +142,8 @@ function MB.CreateMenu()
     	MB.CurrentLastValue=11
 
 		MB.PrepareBankValues("Invent",1)
-    	MB.FillBank(MB.CurrentLastValue)
+    	-- MB.FillBank(MB.CurrentLastValue,MB.BankValueTable)
+    	MB.FilterBank(MB.CurrentLastValue,MB.CurrentFilterType)
     	MB.HideContainer(bool)
     end )
 
@@ -206,19 +208,14 @@ function MB.CreateBank()
 
     -- Создаем кнопки для переключения между гильдбанками
 	local nextXstep=0
-    for i=1,#MB.items.Guilds do
+    for i=1,#MB.GuildsName do
 
-    	-- Сохраняем названия гильдий из Ключей
-	    for k, v in pairs(MB.items.Guilds[i]) do
-	        MB.GuildNames[#MB.GuildNames+1] = k
-	    end
-
-    	local guildname=tostring(MB.GuildNames[i])
+    	local guildname=tostring(MB.GuildsName[i])
     	WINDOW_MANAGER:CreateControl("MBUI_ContainerTitleGuildButton"..i,MBUI_ContainerTitle,CT_BUTTON)
     	_G["MBUI_ContainerTitleGuildButton"..i]:SetParent(MBUI_ContainerTitleGuildButtons)
 		_G["MBUI_ContainerTitleGuildButton"..i]:SetFont("ZoFontGame" )
-		nextXstep=(MBUI_Container:GetWidth()/#MB.items.Guilds*i)
-    	_G["MBUI_ContainerTitleGuildButton"..i]:SetDimensions(MBUI_Container:GetWidth()/#MB.items.Guilds,20)
+		nextXstep=(MBUI_Container:GetWidth()/#MB.GuildsName*i)
+    	_G["MBUI_ContainerTitleGuildButton"..i]:SetDimensions(MBUI_Container:GetWidth()/#MB.GuildsName,20)
     	-- Делаем поправку на ширину самой кнопки
     	_G["MBUI_ContainerTitleGuildButton"..i]:SetAnchor(TOP,MBUI_Container,TOPLEFT,nextXstep-_G["MBUI_ContainerTitleGuildButton"..i]:GetWidth()/2,40)
     	_G["MBUI_ContainerTitleGuildButton"..i]:SetText("["..guildname.."]")
@@ -228,7 +225,8 @@ function MB.CreateBank()
 		_G["MBUI_ContainerTitleGuildButton"..i]:SetHandler( "OnClicked" , function(self)
 			MB.PrepareBankValues("Guild",i)
 			MB.SortPreparedValues()
-			MB.FillBank(11)	
+			-- MB.FillBank(11,MB.BankValueTable)
+			MB.FilterBank(11,MB.CurrentFilterType)
 		 end)
 	end
 
@@ -251,7 +249,8 @@ function MB.CreateBank()
 		_G["MBUI_ContainerTitleInventButton"..i]:SetHandler( "OnClicked" , function(self)
 			MB.PrepareBankValues("Invent",i)
 			MB.SortPreparedValues()
-			MB.FillBank(11)	
+			-- MB.FillBank(11,MB.BankValueTable)
+			MB.FilterBank(11,MB.CurrentFilterType)	
 		 end)
 	end
 
@@ -260,7 +259,7 @@ function MB.CreateBank()
 	    local dynamicControl = CreateControlFromVirtual("MBUI_Row", MBUI_Container, "TemplateRow",i)
 
 	    -- Строка
-	    local fromtop=100
+	    local fromtop=180
 	    _G["MBUI_Row"..i]:SetAnchor(TOP,MBUI_Container,TOP,0,fromtop+52*(i-1))
 	    -- _G["MBUI_Row"..i]:SetDimensions (530,52)
 
@@ -274,7 +273,6 @@ end
 function MB.PrepareBankValues(PrepareType,IdToPrepare)
 	MB.GuildBankIdToPrepare=GuildBankIdToPrepare
 	MB.BankValueTable={}
-
 
 	if PrepareType=="Bank" then
 		debug("Preparing Player values")
@@ -294,9 +292,9 @@ function MB.PrepareBankValues(PrepareType,IdToPrepare)
 				local ItemType=GetItemType(BAG_BANK,MB.ItemCounter)
 
 				MB.BankValueTable[#MB.BankValueTable+1]={
-					["link"]=tostring(clearlink),
+					["ItemLink"]=tostring(clearlink),
 					["icon"] = tostring(icon),
-					["name"]=tostring(name),
+					["ItemName"]=tostring(name),
 					["stackCount"]=stackCount,
 					["StatValue"]=statValue,
 					["sellPrice"] = sellPrice,
@@ -325,8 +323,8 @@ function MB.PrepareBankValues(PrepareType,IdToPrepare)
 		bagIcon, bagSlots=GetBagInfo(BAG_GUILDBANK)
 		debug("Preparing Guild values")
 
-	    local guildname=tostring(GetGuildName(IdToPrepare))
-		MB.BankValueTable=MB.items.Guilds[IdToPrepare][guildname]
+	    local guildname=tostring(MB.GuildsName[IdToPrepare])
+		MB.BankValueTable=MB.items.Guilds[guildname]
 		
 		MBUI_ContainerTitleInventButtons:SetHidden(true)
 		MBUI_ContainerTitleGuildButtons:SetHidden(false)
@@ -335,35 +333,219 @@ function MB.PrepareBankValues(PrepareType,IdToPrepare)
 	end
 
     MBUI_ContainerSlider:SetHandler("OnValueChanged",function(self, value, eventReason)
-		MB.FillBank(value)
+		-- MB.FillBank(value,MB.BankValueTable)
+		MB.FilterBank(value,MB.CurrentFilterType)
     end)
 
-    for i=1,11 do
-        _G["MBUI_Row"..i]:SetHandler("OnMouseWheel" , function(self,delta)
-	    	local calculatedvalue=MB.CurrentLastValue-delta
-	    	if (calculatedvalue>=11) and (calculatedvalue<=#MB.BankValueTable) then
-	    		MB.FillBank(calculatedvalue)
-	    		MBUI_ContainerSlider:SetValue(calculatedvalue)
-	    	end
-	    end )
-    end
-MB.SortPreparedValues()
-return MB.BankValueTable
+	MB.SortPreparedValues()
+	return MB.BankValueTable
 end
 
-function MB.SortPreparedValues()
+-- Инициализация фильтов
+function MB.FilterInit(self)
+	MB.FilterChildrens={}
+		for i=1,self:GetNumChildren() do
+			MB.FilterChildrens[i]=self:GetChild(i)
+		end
+	-- Анимация
+	for k,v in pairs(MB.FilterChildrens) do
+		v.NormalAnimation=ANIMATION_MANAGER:CreateTimelineFromVirtual("MBUI_FilterAnimation",_G[tostring(v:GetName().."TextureNormal")])
+		v.HighlightAnimation=ANIMATION_MANAGER:CreateTimelineFromVirtual("MBUI_FilterAnimation",_G[tostring(v:GetName().."TextureHighlight")])
+		v.PressedAnimation=ANIMATION_MANAGER:CreateTimelineFromVirtual("MBUI_FilterAnimation",_G[tostring(v:GetName().."TexturePressed")])
+	end
 
+	MBUI_ContainerTitleFilterAll.PressedAnimation:PlayInstantlyToEnd()
+	MBUI_ContainerTitleFilterAllTexturePressed:SetAlpha(1)
+end
+
+function MB.FilterEnter(self)
+	_G[tostring(self:GetName().."TextureHighlight")]:SetAlpha(0.5)
+	self.NormalAnimation:PlayFromStart()
+	self.HighlightAnimation:PlayFromStart()
+end
+
+function MB.FilterExit(self)
+	_G[tostring(self:GetName().."TextureHighlight")]:SetAlpha(0)
+	self.NormalAnimation:PlayFromEnd()
+	self.HighlightAnimation:PlayFromEnd()
+end
+
+function MB.FilterClicked(self,filtertype)
+	MB.FilterBank(11,filtertype)
+
+	for k,v in pairs(MB.FilterChildrens) do
+		_G[v:GetName().."TexturePressed"]:SetAlpha(0)
+	end
+
+	_G[self:GetName().."TexturePressed"]:SetAlpha(1)
+	self.PressedAnimation:PlayInstantlyToEnd()
+end
+
+-- Типы фильтров:
+-- All, Weapon, Apparel,Consumable, Materials,Miscellaceous,Junk
+
+-- Не знаю что это за типы.
+-- ["ITEMTYPE_NONE"] = 0
+-- ["ITEMTYPE_PLUG"] = 3
+-- ["ITEMTYPE_TABARD"] = 15
+function MB.FilterBank(position,FilterType)
+	local texture='/esoui/art/miscellaneous/scrollbox_elevator.dds'
+	if not position then position=11 end
+
+	MB.BankValueTableFiltered={}
+
+	Weapon={
+		ITEMTYPE_WEAPON
+	}
+	Apparel={
+		ITEMTYPE_ARMOR,ITEMTYPE_DISGUISE,ITEMTYPE_COSTUME
+	}
+	Consumable={
+		ITEMTYPE_POTION,ITEMTYPE_RECIPE,ITEMTYPE_FOOD,ITEMTYPE_DRINK,ITEMTYPE_CONTAINER,ITEMTYPE_POISON
+	}
+	Materials={
+		ITEMTYPE_ALCHEMY_BASE,ITEMTYPE_BLACKSMITHING_MATERIAL,ITEMTYPE_BLACKSMITHING_RAW_MATERIAL,ITEMTYPE_CLOTHIER_MATERIAL,
+		ITEMTYPE_CLOTHIER_RAW_MATERIAL,ITEMTYPE_ENCHANTING_RUNE,ITEMTYPE_INGREDIENT,ITEMTYPE_RAW_MATERIAL,ITEMTYPE_REAGENT,
+		ITEMTYPE_STYLE_MATERIAL,ITEMTYPE_WEAPON_TRAIT,ITEMTYPE_WOODWORKING_MATERIAL,ITEMTYPE_WOODWORKING_RAW_MATERIAL,ITEMTYPE_ARMOR_TRAIT,
+		ITEMTYPE_SPICE,ITEMTYPE_FLAVORING,ITEMTYPE_ADDITIVE,ITEMTYPE_ARMOR_BOOSTER,ITEMTYPE_BLACKSMITHING_BOOSTER,ITEMTYPE_ENCHANTMENT_BOOSTER,
+		ITEMTYPE_WEAPON_BOOSTER,ITEMTYPE_WOODWORKING_BOOSTER,ITEMTYPE_CLOTHIER_BOOSTER
+	}
+	Miscellaceous={
+		ITEMTYPE_SCROLL,ITEMTYPE_TROPHY,ITEMTYPE_TOOL,ITEMTYPE_SOUL_GEM,ITEMTYPE_SIEGE,ITEMTYPE_LOCKPICK,ITEMTYPE_GLYPH_ARMOR,
+		ITEMTYPE_GLYPH_JEWELRY,ITEMTYPE_GLYPH_WEAPON,ITEMTYPE_AVA_REPAIR,ITEMTYPE_COLLECTIBLE,ITEMTYPE_LURE
+	}
+	Junk={
+		ITEMTYPE_TRASH,ITEMTYPE_NONE,ITEMTYPE_PLUG,ITEMTYPE_TABARD,
+	}
+
+	if FilterType=="Weapon" or FilterType=="Apparel" or FilterType=="Consumable" or FilterType=="Materials" or FilterType=="Miscellaceous" or FilterType=="Junk" then
+		MB.CurrentFilterType=FilterType
+		for k,v in pairs(MB.BankValueTable) do
+			for k1,v1 in pairs(_G[FilterType]) do
+				if type(v)=="table" then
+					if v.ItemType==v1 then
+						debug(v.ItemName.." is "..tostring(FilterType))
+						MB.BankValueTableFiltered[#MB.BankValueTableFiltered+1]=v
+					end
+				end
+			end
+		end
+		MB.FillBank(position,MB.BankValueTableFiltered)
+		if #MB.BankValueTableFiltered>11 then
+			MBUI_ContainerSlider:SetMinMax(11,#MB.BankValueTableFiltered)
+			MBUI_ContainerSlider:SetThumbTexture(texture, texture, texture, 18, (1/#MB.BankValueTableFiltered*25000)/3, 0, 0, 1, 1)
+			MBUI_ContainerSlider:SetHidden(false)
+		else
+			MBUI_ContainerSlider:SetHidden(true)
+		end
+	elseif FilterType=="All" then
+		MB.CurrentFilterType=FilterType
+		MB.FillBank(position,MB.BankValueTable)
+		if #MB.BankValueTable>11 then
+			MBUI_ContainerSlider:SetMinMax(11,#MB.BankValueTable)
+			MBUI_ContainerSlider:SetThumbTexture(texture, texture, texture, 18, (1/#MB.BankValueTable*25000)/3, 0, 0, 1, 1)
+			MBUI_ContainerSlider:SetHidden(false)
+		else
+			MBUI_ContainerSlider:SetHidden(true)
+		end
+	else
+		d("No such FilterType: "..tostring(FilterType))
+		MB.FillBank(position,MB.BankValueTable)
+		if #MB.BankValueTable>11 then
+			MBUI_ContainerSlider:SetMinMax(11,#MB.BankValueTable)
+			MBUI_ContainerSlider:SetThumbTexture(texture, texture, texture, 18, (1/#MB.BankValueTable*25000)/3, 0, 0, 1, 1)
+			MBUI_ContainerSlider:SetHidden(false)
+		else
+			MBUI_ContainerSlider:SetHidden(true)
+		end
+	end
+end
+
+-- сортировка таблицы
+function MB.SortPreparedValues()
 	function compare(a,b)
-		return a["name"]<b["name"]	
+		return a["ItemName"]<b["ItemName"]	
 	end
 
 	table.sort(MB.BankValueTable,compare)
 end
 
-function MB.FillBank(last)
+-- Заполнение банка
+function MB.FillBank(last,TableToFillFrom)
+-- Технические функции
+-- Функции отображения и сокрытия тултипов при наведении мышки
+	function MB.TooltipEnter(self)
+		-- Тут может быть любой другой якорь. Нам важен его родитель
+		ItemTooltip:ClearAnchors()
+		ItemTooltip:ClearLines()
+
+		if self:GetLeft()>=480 then
+			ItemTooltip:SetAnchor(CENTER,self,CENTER,-480,0)
+		else
+			ItemTooltip:SetAnchor(CENTER,self,CENTER,500,0)
+		end
+
+		ItemTooltip:SetLink(TableToFillFrom[self.id].ItemLink)
+
+		-- Сравнительный тултип
+		if self.ItemType==ITEMTYPE_WEAPON or self.ItemType==ITEMTYPE_ARMOR then
+			-- Броня в банке
+			ItemTooltip:ClearAnchors()
+			ComparativeTooltip1:ClearAnchors()
+
+	    	if self:GetLeft()>=480 then
+	    		ItemTooltip:SetAnchor(TOP,self,CENTER,-480,0)
+	    		ComparativeTooltip1:SetAnchor(BOTTOM,self,CENTER,-480,0)
+	    	else
+	    		ItemTooltip:SetAnchor(TOP,self,CENTER,500,0)
+	    		ComparativeTooltip1:SetAnchor(BOTTOM,self,CENTER,500,0)
+	    	end	
+	    	ComparativeTooltip1:SetAlpha(1)
+	    	ComparativeTooltip1:SetHidden(false)
+	    	ItemTooltip:ShowComparativeTooltips()
+		end
+		
+		ItemTooltip:SetAlpha(1)
+		ItemTooltip:SetHidden(false)
+		_G[tostring(self:GetName().."Highlight")]:SetAlpha(1)  
+
+		self.IconTimeline=ANIMATION_MANAGER:CreateTimelineFromVirtual("MBUI_IconAnimation",_G[tostring(self:GetName().."ButtonIcon")])
+		self.IconTimeline:PlayFromStart()
+	end
+
+	function MB.TooltipExit(self)
+		ItemTooltip:ClearAnchors()
+		ItemTooltip:ClearLines()
+		ItemTooltip:SetAlpha(0)
+		ItemTooltip:SetHidden(true)
+		_G[tostring(self:GetName().."Highlight")]:SetAlpha(0)
+
+		self.IconTimeline:PlayFromEnd()
+
+			-- Сравнительный тултип
+			if self.ItemType==ITEMTYPE_WEAPON or self.ItemType==ITEMTYPE_ARMOR then
+				ComparativeTooltip1:ClearAnchors()
+		    	ItemTooltip:HideComparativeTooltips()
+			end
+
+	end
+
+	-- Функция прокрутки колёсиком
+	function MB.MoveScrollerWheel(self,delta)
+		local calculatedvalue=MB.CurrentLastValue-delta
+		if (calculatedvalue>=11) and (calculatedvalue<=#TableToFillFrom) then
+			-- MB.FillBank(calculatedvalue,MB.BankValueTable)
+			MB.FilterBank(calculatedvalue,MB.CurrentFilterType)
+			MBUI_ContainerSlider:SetValue(calculatedvalue)
+		end
+	end
+
+
+	if not TableToFillFrom then d("Wrong TableToFillFrom") return end
+
 	if last<=1 then debug("last<=1") return end
-    if (#MB.BankValueTable==0) then 
-    	d("No data avaliable. Open your bank first.")
+    if (#TableToFillFrom==0) then 
+    	d("No data avaliable.")
     	MBUI_ContainerItemCounter:SetHidden(true)
     	MBUI_ContainerSlider:SetHidden(true)
     	MB.HideContainer(true)
@@ -371,81 +553,57 @@ function MB.FillBank(last)
 	    		_G["MBUI_Row"..i]:SetHidden(true)
 	    	end
     	return 
+	elseif last>1 and last<=11 then
+    	for i=1,11 do
+    		_G["MBUI_Row"..i]:SetHidden(false)
+    	end
 	else
-		local texture='/esoui/art/miscellaneous/scrollbox_elevator.dds'
-		MBUI_ContainerSlider:SetHidden(false)
-    	MBUI_ContainerSlider:SetMinMax(11,#MB.BankValueTable)
-    	MBUI_ContainerSlider:SetThumbTexture(texture, texture, texture, 18, (1/#MB.BankValueTable*25000)/3, 0, 0, 1, 1)
     	for i=1,11 do
     		_G["MBUI_Row"..i]:SetHidden(false)
     	end
     end
     MB.CurrentLastValue=last
 
-    if #MB.BankValueTable<11 then
+    if #TableToFillFrom<11 then
     	-- Прячем Слайдер
     	MBUI_ContainerSlider:SetHidden(true)
 	    -- Заполнение идёт сверху
-	    for i=1,#MB.BankValueTable do
-	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(MB.BankValueTable[i].link)
+	    for i=1,#TableToFillFrom do
+	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(TableToFillFrom[i].ItemLink)
 
 			_G["MBUI_Row"..i].id=i
-	    	_G["MBUI_Row"..i].ItemType=MB.BankValueTable[i].ItemType
+	    	_G["MBUI_Row"..i].ItemType=TableToFillFrom[i].ItemType
 
-	    	-- Регистрируем отображение тултипов при наведении на строку
-		    _G["MBUI_Row"..i]:SetHandler("OnMouseEnter", function(self)
+			_G["MBUI_Row"..i.."ButtonIcon"]:SetTexture(TableToFillFrom[i].icon)
 
-		    	-- Тут может быть любой другой якорь. Нам важен его родитель
-		    	OldAnchor=_G["MBUI_Row"..i.."ButtonIcon"]:GetParent()
-		    	ItemTooltip:ClearAnchors()
-		    	ItemTooltip:ClearLines()
-		    	ItemTooltip:SetAnchor(CENTER,OldAnchor,CENTER,-200,0)
-		    	ItemTooltip:SetLink(_G["MBUI_Row"..i.."Name"]:GetText())
-		    	ItemTooltip:SetAlpha(1)
-		    	ItemTooltip:SetHidden(false)
-		    	_G["MBUI_Row"..i.."Highlight"]:SetDimensions(GetDimensions(_G["MBUI_Row"..i]))
-
-		    	
-		    	end)
-
-		    _G["MBUI_Row"..i]:SetHandler("OnMouseExit", function(self)
-		    	ItemTooltip:ClearAnchors()
-		    	ItemTooltip:ClearLines()
-		    	ItemTooltip:SetAlpha(0)
-		    	ItemTooltip:SetHidden(true)
-		    	
-		    	end)
-
-			_G["MBUI_Row"..i.."ButtonIcon"]:SetTexture(MB.BankValueTable[i].icon)
-
-		    if not MB.BankValueTable[i].meetsUsageRequirement then
+		    if not TableToFillFrom[i].meetsUsageRequirement then
 				_G["MBUI_Row"..i.."ButtonIcon"]:SetColor(1,0,0,1)
 			else
 				_G["MBUI_Row"..i.."ButtonIcon"]:SetColor(1,1,1,1)
 			end
 
-			_G["MBUI_Row"..i.."ButtonStackCount"]:SetText(MB.BankValueTable[i].stackCount)
-			_G["MBUI_Row"..i.."Name"]:SetText(MB.BankValueTable[i].link)
-		    if (MB.BankValueTable[i].statValue~=0) then
-				_G["MBUI_Row"..i.."StatValue"]:SetText(MB.BankValueTable[i].statValue)
+			_G["MBUI_Row"..i.."ButtonStackCount"]:SetText(TableToFillFrom[i].stackCount)
+			_G["MBUI_Row"..i.."Name"]:SetText(TableToFillFrom[i].ItemLink)
+		    if (TableToFillFrom[i].statValue~=0) then
+				_G["MBUI_Row"..i.."StatValue"]:SetText(TableToFillFrom[i].statValue)
 			else
 				_G["MBUI_Row"..i.."StatValue"]:SetText("-")
 			end
-			_G["MBUI_Row"..i.."SellPrice"]:SetText(MB.BankValueTable[i].stackCount*sellPrice.."|t24:24:EsoUI/Art/currency/currency_gold.dds|t")
+			_G["MBUI_Row"..i.."SellPrice"]:SetText(TableToFillFrom[i].stackCount*sellPrice.."|t24:24:EsoUI/Art/currency/currency_gold.dds|t")
 
 			_G["MBUI_Row"..i]:SetHandler("OnMouseUp", function(self,button) 
 		    	if button~=2 then return end
-		    	ZO_ChatWindowTextEntryEditBox:SetText(tostring(ZO_ChatWindowTextEntryEditBox:GetText()).."["..MB.BankValueTable[i].link.."]")
+		    	ZO_ChatWindowTextEntryEditBox:SetText(tostring(ZO_ChatWindowTextEntryEditBox:GetText()).."["..TableToFillFrom[i].ItemLink.."]")
 	    	end)
 		end
 
 		-- Прячем пустые строки
-		for i=#MB.BankValueTable+1,11 do
+		for i=#TableToFillFrom+1,11 do
 			_G["MBUI_Row"..i]:SetHidden(true)
 		end
 		-- Заполняем вместимость банка
-		local CurBankCapacity = MB.BankValueTable.CurSlots or #MB.BankValueTable
-		local BankMaxCapacity = MB.BankValueTable.MaxSlots or bagSlots
+		local CurBankCapacity = TableToFillFrom.CurSlots or #TableToFillFrom
+		local BankMaxCapacity = TableToFillFrom.MaxSlots or bagSlots
 
 		MBUI_ContainerItemCounter:SetText("Bank: "..CurBankCapacity.." / "..BankMaxCapacity)
 		MBUI_ContainerItemCounter:SetHidden(false)
@@ -454,107 +612,48 @@ function MB.FillBank(last)
     	MBUI_ContainerSlider:SetHidden(false)
 	    -- Заполнение идёт снизу
 	    for i=11,1,-1 do
-	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(MB.BankValueTable[last].link)
+	    	debug("last: "..tostring(last))
+	    	local icon,sellPrice,meetsUsageRequirement,equipType,itemStyle = GetItemLinkInfo(TableToFillFrom[last].ItemLink)
 
 	    	_G["MBUI_Row"..i].id=last
-	    	_G["MBUI_Row"..i].ItemType=MB.BankValueTable[last].ItemType
+	    	_G["MBUI_Row"..i].ItemType=TableToFillFrom[last].ItemType
 
-		    -- Регистрируем отображение тултипов при наведении на строку
-		    _G["MBUI_Row"..i]:SetHandler("OnMouseEnter", function(self)
+			_G["MBUI_Row"..i.."ButtonIcon"]:SetTexture(TableToFillFrom[last].icon)
 
-		    	-- Тут может быть любой другой якорь. Нам важен его родитель
-		    	OldAnchor=_G["MBUI_Row"..i.."ButtonIcon"]:GetParent()
-		    	ItemTooltip:ClearAnchors()
-		    	ItemTooltip:ClearLines()
-
-		    	if _G["MBUI_Row"..i]:GetLeft()>=480 then
-		    		ItemTooltip:SetAnchor(CENTER,OldAnchor,CENTER,-480,0)
-		    	else
-		    		ItemTooltip:SetAnchor(CENTER,OldAnchor,CENTER,500,0)
-		    	end
-
-		    	ItemTooltip:SetLink(_G["MBUI_Row"..i.."Name"]:GetText())
-
-		    	-- Сравнительный тултип
-		    	if self.ItemType==ITEMTYPE_WEAPON or self.ItemType==ITEMTYPE_ARMOR then
-		    		-- Броня в банке
-		    		ItemTooltip:ClearAnchors()
-		    		ComparativeTooltip1:ClearAnchors()
-
-			    	if _G["MBUI_Row"..i]:GetLeft()>=480 then
-			    		ItemTooltip:SetAnchor(TOP,OldAnchor,CENTER,-480,0)
-			    		ComparativeTooltip1:SetAnchor(BOTTOM,OldAnchor,CENTER,-480,0)
-			    	else
-			    		ItemTooltip:SetAnchor(TOP,OldAnchor,CENTER,500,0)
-			    		ComparativeTooltip1:SetAnchor(BOTTOM,OldAnchor,CENTER,500,0)
-			    	end	
-			    	ComparativeTooltip1:SetAlpha(1)
-			    	ComparativeTooltip1:SetHidden(false)
-			    	ItemTooltip:ShowComparativeTooltips()
-		    	end
-		    	
-		    	ItemTooltip:SetAlpha(1)
-		    	ItemTooltip:SetHidden(false)
-		    	_G["MBUI_Row"..i.."Highlight"]:SetAlpha(1)  
-
-		    	_G["MBUI_Row"..i.."IconTimeline"]:PlayFromStart()
-		    	end)
-
-		    _G["MBUI_Row"..i]:SetHandler("OnMouseExit", function(self)
-		    	ItemTooltip:ClearAnchors()
-		    	ItemTooltip:ClearLines()
-		    	ItemTooltip:SetAlpha(0)
-		    	ItemTooltip:SetHidden(true)
-		    	_G["MBUI_Row"..i.."Highlight"]:SetAlpha(0) 
-
-		    	_G["MBUI_Row"..i.."IconTimeline"]:PlayFromEnd()
-
-			    	-- Сравнительный тултип
-			    	if self.ItemType==ITEMTYPE_WEAPON or self.ItemType==ITEMTYPE_ARMOR then
-			    		ComparativeTooltip1:ClearAnchors()
-				    	ItemTooltip:HideComparativeTooltips()
-			    	end
-
-		    	end)
-
-			_G["MBUI_Row"..i.."ButtonIcon"]:SetTexture(MB.BankValueTable[last].icon)
-
-		    if not MB.BankValueTable[last].meetsUsageRequirement then
+		    if not TableToFillFrom[last].meetsUsageRequirement then
 				_G["MBUI_Row"..i.."ButtonIcon"]:SetColor(1,0,0,1)
 			else
 				_G["MBUI_Row"..i.."ButtonIcon"]:SetColor(1,1,1,1)
 			end
 
-			_G["MBUI_Row"..i.."ButtonStackCount"]:SetText(MB.BankValueTable[last].stackCount)
-			_G["MBUI_Row"..i.."Name"]:SetText(MB.BankValueTable[last].link)
-		    if (MB.BankValueTable[last].statValue~=0) then
-				_G["MBUI_Row"..i.."StatValue"]:SetText(MB.BankValueTable[last].statValue)
+			_G["MBUI_Row"..i.."ButtonStackCount"]:SetText(TableToFillFrom[last].stackCount)
+			_G["MBUI_Row"..i.."Name"]:SetText(TableToFillFrom[last].ItemLink)
+		    if (TableToFillFrom[last].statValue~=0) then
+				_G["MBUI_Row"..i.."StatValue"]:SetText(TableToFillFrom[last].statValue)
 			else
 				_G["MBUI_Row"..i.."StatValue"]:SetText("-")
 			end
-			_G["MBUI_Row"..i.."SellPrice"]:SetText(MB.BankValueTable[last].stackCount*sellPrice.."|t20:20:EsoUI/Art/currency/currency_gold.dds|t")
+			_G["MBUI_Row"..i.."SellPrice"]:SetText(TableToFillFrom[last].stackCount*sellPrice.."|t20:20:EsoUI/Art/currency/currency_gold.dds|t")
 
 			_G["MBUI_Row"..i]:SetHandler("OnMouseUp", function(self,button) 
 		    	if button~=2 then return end
-		    	ZO_ChatWindowTextEntryEditBox:SetText(tostring(ZO_ChatWindowTextEntryEditBox:GetText()).."["..MB.BankValueTable[self.id].link.."]")
+		    	ZO_ChatWindowTextEntryEditBox:SetText(tostring(ZO_ChatWindowTextEntryEditBox:GetText()).."["..TableToFillFrom[self.id].ItemLink.."]")
 	    	end)
 
-			if last<=#MB.BankValueTable and last>1 then
+			if last<=#TableToFillFrom and last>1 then
 	    		last=last-1
 	    	else
 	    		last=11
 	    	end
 		end
 		-- Заполняем вместимость банка
-		local CurBankCapacity = MB.BankValueTable.CurSlots or #MB.BankValueTable
-		local BankMaxCapacity = MB.BankValueTable.MaxSlots or bagSlots
+		local CurBankCapacity = TableToFillFrom.CurSlots or #TableToFillFrom
+		local BankMaxCapacity = TableToFillFrom.MaxSlots or bagSlots
 
 		MBUI_ContainerItemCounter:SetText("Bank: "..CurBankCapacity.." / "..BankMaxCapacity)
 		MBUI_ContainerItemCounter:SetHidden(false)
 	end
 end
-
-
 
 
 function MB.PL_Opened()
@@ -576,7 +675,7 @@ end
 
 
 
-function commandHandler( text )
+function MB.commandHandler( text )
 	if text=="cls" then
 		MB.items.Guilds={}
 		MB.items.Chars={}
@@ -592,28 +691,31 @@ function commandHandler( text )
 	elseif text=="p" then
     	MB.CurrentLastValue=11
 		MB.PrepareBankValues("Bank")
-		MB.FillBank(MB.CurrentLastValue)
+		-- MB.FillBank(MB.CurrentLastValue,MB.BankValueTable)
+		MB.FilterBank(MB.CurrentLastValue,MB.CurrentFilterType)
     	MBUI_Container:SetHidden(false)
     	MB.PreviousButtonClicked=nil
 		MB.LastButtonClicked=nil
 	elseif text=="i" then
     	MB.CurrentLastValue=11
 		MB.PrepareBankValues("Invent",1)
-		MB.FillBank(MB.CurrentLastValue)
+		-- MB.FillBank(MB.CurrentLastValue,MB.BankValueTable)
+		MB.FilterBank(MB.CurrentLastValue,MB.CurrentFilterType)
     	MBUI_Container:SetHidden(false)
     	MB.PreviousButtonClicked=nil
 		MB.LastButtonClicked=nil
 	elseif text=="g" then
     	MB.CurrentLastValue=11
 		MB.PrepareBankValues("Guild",1)
-		MB.FillBank(MB.CurrentLastValue)
+		-- MB.FillBank(MB.CurrentLastValue,MB.BankValueTable)
+		MB.FilterBank(MB.CurrentLastValue,MB.CurrentFilterType)
     	MBUI_Container:SetHidden(false)
 		MB.PreviousButtonClicked=nil
 		MB.LastButtonClicked=nil
 	else
 		d("/mb hide - hide main window")
 		d("/mb show - show main window")
-		d("/mb b - show player bank")
+		d("/mb p - show player bank")
 		d("/mb g - show guild bank")
 		d("/mb i - show chars inventories")
 		d("/mb cls - clear all data and reloadui")
@@ -653,25 +755,28 @@ function MB.SavePlayerInvent()
 		if GetItemName(BAG_BACKPACK,MB.ItemCounter)~="" then
 
 			--Избавляемся от мусора при сохранении
-			local name = zo_strformat(SI_TOOLTIP_ITEM_NAME, GetItemName(BAG_BACKPACK, MB.ItemCounter))
-			local link = GetItemLink(BAG_BACKPACK,MB.ItemCounter)
+			name = zo_strformat(SI_TOOLTIP_ITEM_NAME, GetItemName(BAG_BACKPACK, MB.ItemCounter))
+			link = GetItemLink(BAG_BACKPACK,MB.ItemCounter)
 			clearlink =string.gsub(link, "|h.+|h", "|h"..tostring(name).."|h")
 
-			local stackCount = GetSlotStackSize(BAG_BACKPACK,MB.ItemCounter)
-			local statValue = GetItemStatValue(BAG_BACKPACK,MB.ItemCounter)
-			local icon, stack, sellPrice, meetsUsageRequirement, locked, equipType, itemStyle, quality = GetItemInfo(BAG_BACKPACK,MB.ItemCounter)
-			local ItemType=GetItemType(BAG_BACKPACK,MB.ItemCounter)
+			stackCount = GetSlotStackSize(BAG_BACKPACK,MB.ItemCounter)
+			statValue = GetItemStatValue(BAG_BACKPACK,MB.ItemCounter)
+			icon, stack, sellPrice, meetsUsageRequirement, locked, equipType, itemStyle, quality = GetItemInfo(BAG_BACKPACK,MB.ItemCounter)
+			ItemType=GetItemType(BAG_BACKPACK,MB.ItemCounter)
+			start,finish=string.find(link, "%d+")
+			id=tonumber(string.sub(link,start,finish))
 
 			MB.items.Chars[thisCharName][#MB.items.Chars[thisCharName]+1]={
-				["link"]=tostring(clearlink),
+				["ItemLink"]=tostring(clearlink),
 				["icon"] = tostring(icon),
-				["name"]=tostring(name),
+				["ItemName"]=tostring(name),
 				["stackCount"]=stackCount,
 				["StatValue"]=statValue,
 				["sellPrice"] = sellPrice,
 				["quality"] = quality,
 				["meetsUsageRequirement"]=meetsUsageRequirement,
-				["ItemType"]=ItemType
+				["ItemType"]=ItemType,
+				["Id"]=id
 			}
 		end
 		MB.ItemCounter=MB.ItemCounter+1
@@ -708,12 +813,15 @@ if (not MB.AddonReady) then return end
 		MB.GCountOnUpdateReady=false
 	    local guildbankid=GetSelectedGuildBankId() or 0
 	    local guildname=tostring(GetGuildName(guildbankid)) or 0
-	    MB.items.Guilds[guildbankid][guildname]={}
+
+	    if guildname=="" then d("Cannot save variables. Try again.") return end
+
+	    MB.items.Guilds[guildname]={}
 		d("Data saved for "..guildname)
 	      	
 		bagIcon, bagSlots=GetBagInfo(BAG_GUILDBANK)
 
-		local sv = MB.items.Guilds[guildbankid][guildname]
+		local sv = MB.items.Guilds[guildname]
 
 		for i=1, #ZO_GuildBankBackpack.data do
 			slotIndex=ZO_GuildBankBackpack.data[i].data.slotIndex
@@ -729,18 +837,21 @@ if (not MB.AddonReady) then return end
 			ItemType=GetItemType(BAG_GUILDBANK,slotIndex)
 
 			clearlink =string.gsub(link, "|h.+|h", "|h"..tostring(name).."|h")
+			start,finish=string.find(link, "%d+")
+			id=tonumber(string.sub(link,start,finish))
 
 			sv[#sv+1] = 
 			{
-				["link"] = tostring(clearlink),
+				["ItemLink"] = tostring(clearlink),
 				["icon"] = tostring(iconFile),
-				["name"] = tostring(name),
+				["ItemName"] = tostring(name),
 				["stackCount"] = stackCount,
 				["statValue"] = statValue,
 				["sellPrice"] = sellPrice,
 				["quality"] = quality,
 				["meetsUsageRequirement"]=meetsUsageRequirement,
-				["ItemType"]=ItemType
+				["ItemType"]=ItemType,
+				["Id"]=id
 
 			}
 			sv.CurSlots=#ZO_GuildBankBackpack.data
